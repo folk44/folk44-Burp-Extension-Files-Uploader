@@ -12,6 +12,10 @@ from javax.swing import (
     BoxLayout,
     JFrame,
     SwingUtilities,
+    JMenuBar,
+    JMenu,
+    JMenuItem,
+    JTextField,
 )
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 from burp import IHttpListener
@@ -20,28 +24,46 @@ from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
 from javax.swing import JMenuItem
 
-class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
+
+class BurpExtender(
+    IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation
+):
     # MENU ITEM
     def createMenuItems(self, invocation):
         context = invocation.getInvocationContext()
         menu = []
-        menu.append(JMenuItem("Payloads", actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv)))
-        menu.append(JMenuItem("Positions", actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv)))
-        menu.append(JMenuItem("Upload History", actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv)))
+        menu.append(
+            JMenuItem(
+                "Payloads",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
+        menu.append(
+            JMenuItem(
+                "Positions",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
+        menu.append(
+            JMenuItem(
+                "Upload History",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
         if menu == []:
             return
         else:
             return menu
+
     def __init__(self):
         self.payload_files = DefaultListModel()
         self.payload_files.addElement(None)
         self.current_index = 0
 
-    def registerExtenderCallbacks(self, callbacks): # registerExtenderCallbacks
-        
+    def registerExtenderCallbacks(self, callbacks):  # registerExtenderCallbacks
         self.helpers = callbacks.getHelpers()
-        callbacks.setExtensionName('File Uploader1') # setExtensionName
-        callbacks.registerContextMenuFactory(self)# registerContextMenuFactory
+        callbacks.setExtensionName("File Uploader1")  # setExtensionName
+        callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory
         # Main UI setup
         self.main_panel = JPanel(BorderLayout())
         self.tabbedPane = JTabbedPane()
@@ -59,8 +81,13 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 
 
+
+
+
+
         ########### POSITIONS ###############
         # Fill in the positions panel
+        # Start upload button
         start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
         self.start_upload_button = JButton(
             "Start upload", actionPerformed=self.start_upload
@@ -74,9 +101,18 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                 self.start_upload_button.getFont().getSize(),
             )
         )
-        #start_upload__panel.add(self.start_upload_button)
+        start_upload__panel.add(self.start_upload_button)
         # Add the top panel to the main panel at the NORTH position
-        #self.payloads_panel.add(start_upload__panel, BorderLayout.NORTH)
+        self.positions_panel.add(start_upload__panel, BorderLayout.NORTH)
+
+        # Start upload mode panel
+        upload_mode_panel = JPanel(FlowLayout(FlowLayout.LEFT))
+        upload_mode_label = self.createTopicLabel("Upload mode")
+        upload_mode_panel.add(upload_mode_label)
+        # Add the upload mode panel to the main panel at the WEST position
+        self.positions_panel.add(upload_mode_panel, BorderLayout.WEST)
+        self.positions_panel.add(JScrollPane(JTextArea(10, 50)), BorderLayout.CENTER)
+        upload_mode_panel.add(JScrollPane(JTextArea(10, 50)), BorderLayout.CENTER)
 
 
 
@@ -87,7 +123,16 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 
 
-         ### PAYLOADS ###############
+
+
+
+
+
+
+
+
+
+        ### PAYLOADS ###############
 
         # Start upload button
         start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
