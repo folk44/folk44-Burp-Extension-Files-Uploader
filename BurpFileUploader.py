@@ -16,6 +16,7 @@ from javax.swing import (
     JMenu,
     JMenuItem,
     JTextField,
+    
 )
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 from burp import IHttpListener
@@ -23,7 +24,6 @@ from burp import IContextMenuFactory, IContextMenuInvocation
 from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
 from javax.swing import JMenuItem
-
 
 class BurpExtender(
     IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation
@@ -59,7 +59,7 @@ class BurpExtender(
         self.payload_files = DefaultListModel()
         self.payload_files.addElement(None)
         self.current_index = 0
-
+    #self is the object of the class
     def registerExtenderCallbacks(self, callbacks):  # registerExtenderCallbacks
         self.helpers = callbacks.getHelpers()
         callbacks.setExtensionName("File Uploader1")  # setExtensionName
@@ -88,7 +88,7 @@ class BurpExtender(
         ########### POSITIONS ###############
         # Fill in the positions panel
         # Start upload button
-        start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT)) # need to fix to border layout
         self.start_upload_button = JButton(
             "Start upload", actionPerformed=self.start_upload
         )
@@ -106,13 +106,41 @@ class BurpExtender(
         self.positions_panel.add(start_upload__panel, BorderLayout.NORTH)
 
         # Start upload mode panel
-        upload_mode_panel = JPanel(FlowLayout(FlowLayout.LEFT))
+        panel = JPanel()
+        upload_mode_panel = JPanel(panel(BoxLayout.LEFT))
         upload_mode_label = self.createTopicLabel("Upload mode")
         upload_mode_panel.add(upload_mode_label)
         # Add the upload mode panel to the main panel at the WEST position
-        self.positions_panel.add(upload_mode_panel, BorderLayout.WEST)
-        self.positions_panel.add(JScrollPane(JTextArea(10, 50)), BorderLayout.CENTER)
-        upload_mode_panel.add(JScrollPane(JTextArea(10, 50)), BorderLayout.CENTER)
+        self.positions_panel.add(upload_mode_panel, BorderLayout.WEST) # border layout
+
+
+        # menu
+        def OnClick(event):
+            txt.text = event.getActionCommand()
+        
+        bar = JMenuBar()
+        bar.setPreferredSize(Dimension(200, 20)) # set size
+        file = JMenu()
+        file.setPreferredSize(Dimension(200, 20)) # set size
+        Upload_one_file = JMenuItem("Upload one file per one request",actionPerformed = OnClick) #menu item
+        Upload_all_file = JMenuItem("Upload all files per one request",actionPerformed = OnClick) #menu item
+        file.add(Upload_one_file) # add menu item
+        file.add(Upload_all_file) # add menu item
+        bar.add(file) # add menu
+        upload_mode_panel.add(bar) # add menu to panel
+        # end menu
+
+        # start payload positions panel
+        target_positions_panel = JPanel(FlowLayout(FlowLayout.LEFT))
+        target_positions_label = self.createTopicLabel("Target positions")
+        target_positions_panel.add(target_positions_label)
+        # Add the target positions panel to the main panel at the WEST position
+        self.positions_panel.add(target_positions_panel, BorderLayout.WEST)
+
+
+
+
+
 
 
 
