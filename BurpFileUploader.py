@@ -53,14 +53,41 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         )  # This will be the main panel for the payloads tab
         self.history_panel = JPanel(BorderLayout())
 
-        ### POSITIONS ###############
-        # Fill in the positions panel
-        self.positions_button = JButton(
-            "Set Position", actionPerformed=self.set_position
-        )
-        self.positions_panel.add(self.positions_button)
 
-        ### PAYLOADS ###############
+
+
+
+
+
+        ########### POSITIONS ###############
+        # Fill in the positions panel
+        start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        self.start_upload_button = JButton(
+            "Start upload", actionPerformed=self.start_upload
+        )
+        self.start_upload_button.setBackground(Color(255, 102, 51))
+        self.start_upload_button.setForeground(Color.WHITE)
+        self.start_upload_button.setFont(
+            Font(
+                self.start_upload_button.getFont().getName(),
+                Font.BOLD,
+                self.start_upload_button.getFont().getSize(),
+            )
+        )
+        #start_upload__panel.add(self.start_upload_button)
+        # Add the top panel to the main panel at the NORTH position
+        #self.payloads_panel.add(start_upload__panel, BorderLayout.NORTH)
+
+
+
+
+
+
+
+
+
+
+         ### PAYLOADS ###############
 
         # Start upload button
         start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
@@ -144,27 +171,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # Create the JList to display current file
         self.file_label = JLabel(self.payload_files.getElementAt(self.current_index))
         print(self.payload_files.getElementAt(self.current_index))
-
-        def getResponseHeadersAndBody(self, content):
-            response = content.getResponse()
-            response_data = self._helpers.analyzeResponse(response)
-            headers = list(response_data.getHeaders() or "")
-            body = response[response_data.getBodyOffset() :].tostring()
-            return headers, body
-
-        def processHttpMessage(self, tool, is_request, content):
-            if is_request:
-                return
-            headers, body = self.getResponseHeadersAndBody(content)
-
-            # modify body
-            body = body.replace(" the Cloud", " my Butt")
-            body = body.replace(" the cloud", " my butt")
-            body = body.replace(" Cloud", " Butt")
-            body = body.replace(" cloud", " butt")
-
-            new_message = self._helpers.buildHttpMessage(headers, body)
-            content.setResponse(new_message)
 
         # Request preview mornitoring
         self.preview_textarea = JTextArea(10, 50)
