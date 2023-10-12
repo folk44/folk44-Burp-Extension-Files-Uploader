@@ -1,5 +1,5 @@
-from burp import IBurpExtender, ITab
-from javax.swing import JPanel, JTabbedPane, JButton, JFileChooser, JList, JScrollPane, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, SwingUtilities
+from burp import IBurpExtender, ITab, IHttpListener
+from javax.swing import JPanel, JTabbedPane, JButton, JFileChooser, JList, JScrollPane, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, JSplitPane
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 
 class BurpExtender(IBurpExtender, ITab):
@@ -13,7 +13,6 @@ class BurpExtender(IBurpExtender, ITab):
         self.callbacks = callbacks
         self.helpers = callbacks.getHelpers()
 
-        callbacks.setExtensionName("Files Uploader")
 
         # Main UI setup
         self.main_panel = JPanel(BorderLayout())
@@ -27,11 +26,14 @@ class BurpExtender(IBurpExtender, ITab):
 
 ### POSITIONS ###############
         # Fill in the positions panel
-        self.positions_button = JButton("Set Position", actionPerformed=self.set_position)
-        self.positions_panel.add(self.positions_button)
+
 
 
 ### PAYLOADS ###############
+        # Panel for splitting payload_setting & request preview
+        split_panel = JSplitPane(JSplitPane.VERTICAL_SPLIT)
+        split_panel.setDividerLocation(250)
+        split_panel.setBorder(None)
         
     # Start upload button
         start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
@@ -44,8 +46,8 @@ class BurpExtender(IBurpExtender, ITab):
         self.payloads_panel.add(start_upload__panel, BorderLayout.NORTH)
 
     # Payloads panel
-        # # Set topic
-        payload_label = self.createTopicLabel("Payload setting")
+        # Set topic
+        payload_setting_label = self.createTopicLabel("Payload setting")
 
         # Add buttons
         self.add_payload_button = JButton("Add File", actionPerformed=self.add_payload)
@@ -67,14 +69,15 @@ class BurpExtender(IBurpExtender, ITab):
         button_panel.add(self.preview_payload_button)
         control_panel.add(button_panel)
         control_panel.add(payload_list_scrollpane)
-        upload_panel.add(payload_label, BorderLayout.NORTH)
+        upload_panel.add(payload_setting_label, BorderLayout.NORTH)
         upload_panel.add(control_panel, BorderLayout.WEST)
+        upload_panel.setMinimumSize(Dimension(200, 50))
+        upload_panel.setMaximumSize(Dimension(600, 300))
 
-        # Add components to payloads panel
-        self.payloads_panel.add(upload_panel, BorderLayout.WEST)
 
     # Preview panel
         preview_panel = JPanel(BorderLayout())
+
         # Set topic
         preview_label = self.createTopicLabel("Request preview")
         # Preview scrolling button
@@ -93,8 +96,7 @@ class BurpExtender(IBurpExtender, ITab):
         print(self.payload_files.getElementAt(self.current_index))
 
         # Request preview mornitoring
-        self.preview_textarea = JTextArea(10, 50)
-        self.preview_textarea.setEditable(True)
+
 
         # Group topic & scrolling button
         group_header_preview = JPanel(GridLayout(4,1))
@@ -102,16 +104,18 @@ class BurpExtender(IBurpExtender, ITab):
         group_header_preview.add(group_scrolling_preview)
         group_header_preview.add(self.file_label)
         preview_panel.add(group_header_preview, BorderLayout.NORTH)
-        preview_panel.add(JScrollPane(self.preview_textarea), BorderLayout.CENTER)
+        # preview_panel.add(Request preview, BorderLayout.CENTER)
+        preview_panel.setMinimumSize(Dimension(200, 50))
+        preview_panel.setMaximumSize(Dimension(600, 300))
+        
+        # Add 2 components to split_panel and add to payloads_panel
+        split_panel.setTopComponent(upload_panel)
+        split_panel.setBottomComponent(preview_panel)
+        self.payloads_panel.add(split_panel, BorderLayout.CENTER)
 
-        # Add components to payloads panel
-        self.payloads_panel.add(preview_panel, BorderLayout.SOUTH)
 
 
 ### HISTORY ###############
-        # Fill in the history panel (just a placeholder for now)
-        self.history_text = JTextArea(25, 50)
-        self.history_panel.add(JScrollPane(self.history_text))
 
         
         
@@ -193,6 +197,8 @@ class BurpExtender(IBurpExtender, ITab):
             self.current_index += 1
             self.update_count()
             self.update_file_label()
+    
+
 
 ### MAIN METHODS ###############
     def start_upload(self, event):
