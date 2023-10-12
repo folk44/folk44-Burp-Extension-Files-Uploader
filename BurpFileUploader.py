@@ -1,22 +1,80 @@
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
 IMessageEditorTabFactory, IMessageEditorTab, IExtensionStateListener )
-from javax.swing import JPanel, JTabbedPane, JButton, JFileChooser, JList, JScrollPane, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, JSplitPane,JMenu,JMenuItem,JTextField,JMenuBar
+from javax.swing import (JPanel,
+    JTabbedPane,
+    JButton,
+    JFileChooser,
+    JList,
+    JScrollPane,
+    DefaultListModel,
+    JTextArea,
+    JLabel,
+    BoxLayout,
+    JFrame,
+    SwingUtilities,
+    JMenuBar,
+    JMenu,
+    JTextField,
+    JSplitPane,
+    JCheckBox,
+    JRadioButton,
+    JCheckBoxMenuItem,
+    JPopupMenu,
+    JTable,
+    JViewport,
+    JScrollBar,
+    JSpinner,
+    JSpinner)
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
+from burp import IHttpListener
+from burp import IContextMenuFactory, IContextMenuInvocation
+from java.awt import Toolkit
+from java.awt.datatransfer import StringSelection
+from javax.swing import JMenuItem
 
-class BurpExtender(IBurpExtender, ITab):
-
+class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
+    # MENU ITEM
+    def createMenuItems(self, invocation): # for right click on request and send to our function
+        context = invocation.getInvocationContext()
+        menu = []
+        menu.append(
+            JMenuItem(
+                "Payloads",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
+        menu.append(
+            JMenuItem(
+                "Positions",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
+        menu.append(
+            JMenuItem(
+                "Upload History",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
+        if menu == []:
+            return
+        else:
+            return menu
     def __init__(self):
         self.payload_files = DefaultListModel()
         self.payload_files.addElement(None)
         self.current_index = 0
         
-    def registerExtenderCallbacks(self, callbacks):
-        self.callbacks = callbacks
-        self.helpers = callbacks.getHelpers()
+    def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
+        self.callbacks = callbacks # set callbacks
+        self.helpers = callbacks.getHelpers() # set helpers
+        callbacks.setExtensionName("File Uploader")  # setExtensionName
+        callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory
+        
 
         # creating a message editor from burp to show request 
         self.requestViewer = callbacks.createMessageEditor(None, True)
+        self.requestViewerforposition = callbacks.createMessageEditor(None, True)
         self.responseViewer = callbacks.createMessageEditor(None, True)
         
         # Main UI setup
@@ -79,25 +137,27 @@ class BurpExtender(IBurpExtender, ITab):
         
         bar = JMenuBar()
         bar.setPreferredSize(Dimension(200, 20)) # set size
-        file = JMenu()
-        file.setPreferredSize(Dimension(200, 20)) # set size
+        mode = JMenu()
+        mode.setPreferredSize(Dimension(200, 20)) # set size
         Upload_one_file = JMenuItem("Upload one file per one request",actionPerformed = OnClick) #menu item
         Upload_all_file = JMenuItem("Upload all files per one request",actionPerformed = OnClick) #menu item
-        file.add(Upload_one_file) # add menu item
-        file.add(Upload_all_file) # add menu item
-        bar.add(file) # add menu
+        mode.add(Upload_one_file) # add menu item
+        mode.add(Upload_all_file) # add menu item
+        bar.add(mode) # add menu
         control_panel.add(bar) # add menu to panel
         # end menu
 
         # Payloads panel
-        payload_position_label = self.createTopicLabel("Payload Position")
+        payload_position_label = self.createTopicLabel("Target")
         control_panel.add(payload_position_label, BorderLayout.WEST)
+        target_label = JTextArea()
+        target_label.setPreferredSize(Dimension(200, 20)) # set size
+        target_label.setBackground(Color(222, 222, 222))
+        control_panel.add(target_label, BorderLayout.WEST)
 
         # Preview panel
         preview_panel = JPanel(BorderLayout())
 
-        # Set topic
-        preview_label = self.createTopicLabel("Request preview")
         # Preview scrolling button
         group_scrolling_preview = JPanel(FlowLayout(FlowLayout.LEFT))
         self.previous_payload_button = JButton("<", actionPerformed=self.previous_payload)
@@ -114,16 +174,15 @@ class BurpExtender(IBurpExtender, ITab):
         print(self.payload_files.getElementAt(self.current_index))
 
         # Request preview mornitoring
-        self.editor_view = JTabbedPane()
-        self.editor_view.addTab("Request", self.requestViewer.getComponent())
+        self.editor_viewposition = JTabbedPane()
+        self.editor_viewposition.addTab("Request", self.requestViewerforposition.getComponent())
 
         # Group topic & scrolling button
         group_header_preview = JPanel(GridLayout(3,1))
-        group_header_preview.add(preview_label)
         group_header_preview.add(group_scrolling_preview)
         group_header_preview.add(self.file_label)
         preview_panel.add(group_header_preview, BorderLayout.NORTH)
-        preview_panel.add(self.editor_view)
+        preview_panel.add(self.editor_viewposition)
         preview_panel.setMinimumSize(Dimension(200, 50))
         preview_panel.setMaximumSize(Dimension(600, 300))
         
@@ -132,7 +191,7 @@ class BurpExtender(IBurpExtender, ITab):
         split_panel.setBottomComponent(preview_panel)
         self.positions_panel.add(split_panel, BorderLayout.CENTER)
 
-        self.callbacks.customizeUiComponent(self.editor_view)
+        self.callbacks.customizeUiComponent(self.editor_viewposition)
 
 
 
