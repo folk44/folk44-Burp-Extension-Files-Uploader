@@ -1,4 +1,6 @@
-from burp import IBurpExtender, ITab, IHttpListener
+from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
+IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
+IMessageEditorTabFactory, IMessageEditorTab, IExtensionStateListener )
 from javax.swing import JPanel, JTabbedPane, JButton, JFileChooser, JList, JScrollPane, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, JSplitPane
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 
@@ -13,7 +15,10 @@ class BurpExtender(IBurpExtender, ITab):
         self.callbacks = callbacks
         self.helpers = callbacks.getHelpers()
 
-
+        # creating a message editor from burp to show request 
+        self.requestViewer = callbacks.createMessageEditor(None, True)
+        self.responseViewer = callbacks.createMessageEditor(None, True)
+        
         # Main UI setup
         self.main_panel = JPanel(BorderLayout())
         self.tabbedPane = JTabbedPane()
@@ -53,7 +58,7 @@ class BurpExtender(IBurpExtender, ITab):
         self.add_payload_button = JButton("Add File", actionPerformed=self.add_payload)
         self.remove_payload_button = JButton("Remove File", actionPerformed=self.remove_payload)
         self.clear_payload_button = JButton("Clear All", actionPerformed=self.clear_payloads)
-        self.preview_payload_button = JButton("Preview", actionPerformed=self.preview_payloads)
+        self.preview_payload_button = JButton("Generate", actionPerformed=self.generate_payloads)
         self.payload_list = JList(self.payload_files)
 
         # Create JScrollPane with fixed size for self.payload_list
@@ -92,26 +97,29 @@ class BurpExtender(IBurpExtender, ITab):
         group_scrolling_preview.add(self.count_label)
 
         # Create the JList to display current file
-        self.file_label = JLabel(self.payload_files.getElementAt(self.current_index))
+        self.file_label = JLabel("  " + str(self.payload_files.getElementAt(self.current_index)))
         print(self.payload_files.getElementAt(self.current_index))
 
         # Request preview mornitoring
-
+        self.editor_view = JTabbedPane()
+        self.editor_view.addTab("Request", self.requestViewer.getComponent())
 
         # Group topic & scrolling button
-        group_header_preview = JPanel(GridLayout(4,1))
+        group_header_preview = JPanel(GridLayout(3,1))
         group_header_preview.add(preview_label)
         group_header_preview.add(group_scrolling_preview)
         group_header_preview.add(self.file_label)
         preview_panel.add(group_header_preview, BorderLayout.NORTH)
-        # preview_panel.add(Request preview, BorderLayout.CENTER)
+        preview_panel.add(self.editor_view, BorderLayout.CENTER)
         preview_panel.setMinimumSize(Dimension(200, 50))
         preview_panel.setMaximumSize(Dimension(600, 300))
         
-        # Add 2 components to split_panel and add to payloads_panel
+        # Add 2 components to split_panel and add it to payloads_panel
         split_panel.setTopComponent(upload_panel)
         split_panel.setBottomComponent(preview_panel)
         self.payloads_panel.add(split_panel, BorderLayout.CENTER)
+
+        self.callbacks.customizeUiComponent(self.editor_view)
 
 
 
@@ -156,7 +164,10 @@ class BurpExtender(IBurpExtender, ITab):
                 if file.getPath() not in self.convert_to_list(self.payload_files):
                     # add path to the payload_files
                     self.payload_files.addElement(file.getPath())
+                    if self.current_index == 0:
+                        self.current_index = 1
                     self.update_count()
+                    self.update_file_label()
                     
     def convert_to_list(self, model):
         return [model.elementAt(i) for i in range(model.size())]
@@ -176,7 +187,7 @@ class BurpExtender(IBurpExtender, ITab):
         self.update_count()
         self.update_file_label()
     
-    def preview_payloads(self, event):
+    def generate_payloads(self, event):
         pass
 
     def update_count(self):
@@ -184,7 +195,7 @@ class BurpExtender(IBurpExtender, ITab):
         print(self.payload_files.getElementAt(self.current_index))
 
     def update_file_label(self):
-        self.file_label.setText(self.payload_files.getElementAt(self.current_index))
+        self.file_label.setText("  " + str(self.payload_files.getElementAt(self.current_index)))
 
     def previous_payload(self, event):
         if self.current_index > 1:
