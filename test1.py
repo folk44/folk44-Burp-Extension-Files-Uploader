@@ -12,6 +12,11 @@ from javax.swing import (
     BoxLayout,
     JFrame,
     SwingUtilities,
+    JMenuBar,
+    JMenu,
+    JMenuItem,
+    JTextField,
+    
 )
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 from burp import IHttpListener
@@ -20,28 +25,45 @@ from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
 from javax.swing import JMenuItem
 
-class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
+class BurpExtender(
+    IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation
+):
     # MENU ITEM
     def createMenuItems(self, invocation):
         context = invocation.getInvocationContext()
         menu = []
-        menu.append(JMenuItem("Payloads", actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv)))
-        menu.append(JMenuItem("Positions", actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv)))
-        menu.append(JMenuItem("Upload History", actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv)))
+        menu.append(
+            JMenuItem(
+                "Payloads",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
+        menu.append(
+            JMenuItem(
+                "Positions",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
+        menu.append(
+            JMenuItem(
+                "Upload History",
+                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
+            )
+        )
         if menu == []:
             return
         else:
             return menu
+
     def __init__(self):
         self.payload_files = DefaultListModel()
         self.payload_files.addElement(None)
         self.current_index = 0
-
-    def registerExtenderCallbacks(self, callbacks): # registerExtenderCallbacks
-        
+    #self is the object of the class
+    def registerExtenderCallbacks(self, callbacks):  # registerExtenderCallbacks
         self.helpers = callbacks.getHelpers()
-        callbacks.setExtensionName('File Uploader1') # setExtensionName
-        callbacks.registerContextMenuFactory(self)# registerContextMenuFactory
+        callbacks.setExtensionName("File Uploader1")  # setExtensionName
+        callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory
         # Main UI setup
         self.main_panel = JPanel(BorderLayout())
         self.tabbedPane = JTabbedPane()
@@ -53,12 +75,113 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         )  # This will be the main panel for the payloads tab
         self.history_panel = JPanel(BorderLayout())
 
-        ### POSITIONS ###############
+
+
+
+
+
+
+
+
+
+
+        ########### POSITIONS ###############
         # Fill in the positions panel
-        self.positions_button = JButton(
-            "Set Position", actionPerformed=self.set_position
+        # Start upload button
+        panel = JPanel()
+        start_upload__panel = JPanel(FlowLayout()) # need to fix to border layout
+        self.start_upload_button = JButton(
+            "Start upload", actionPerformed=self.start_upload
         )
-        self.positions_panel.add(self.positions_button)
+        
+        self.start_upload_button.setBackground(Color(255, 102, 51))
+        self.start_upload_button.setForeground(Color.WHITE)
+        self.start_upload_button.setFont(
+            Font(
+                self.start_upload_button.getFont().getName(),
+                Font.BOLD,
+                self.start_upload_button.getFont().getSize(),
+            )
+        )
+        start_upload__panel.add(self.start_upload_button)
+        button_panel = JPanel(GridLayout(6, 1))
+        # Add the top panel to the main panel at the NORTH position
+        
+        
+        self.positions_panel.add(start_upload__panel, BorderLayout.EAST)
+        # Add, Clear, Auto
+        self.add_payload_position_button = JButton("Add", actionPerformed=self.add_payload)
+        self.clear_payload_position_button = JButton("Clear", actionPerformed=self.clear_payloads)
+        self.auto_payload_position_button = JButton("Auto", actionPerformed=self.preview_payloads)
+        start_upload__panel.add(self.add_payload_position_button, BorderLayout.WEST)
+        start_upload__panel.add(self.clear_payload_position_button, BorderLayout.CENTER)
+        start_upload__panel.add(self.auto_payload_position_button, BorderLayout.EAST)
+        def add_payload(self,event):
+            pass
+        
+        # Start upload mode panel
+        
+        upload_mode_panel = JPanel(FlowLayout(FlowLayout.LEFT))
+        upload_mode_label = self.createTopicLabel("Upload mode")
+        upload_mode_panel.add(upload_mode_label)
+        # Add the upload mode panel to the main panel at the WEST position
+        self.positions_panel.add(upload_mode_panel, BorderLayout.WEST) # border layout
+
+        
+        # menu
+        def OnClick(event):
+            txt.text = event.getActionCommand()
+        
+        bar = JMenuBar()
+        bar.setPreferredSize(Dimension(200, 20)) # set size
+        file = JMenu()
+        file.setPreferredSize(Dimension(200, 20)) # set size
+        Upload_one_file = JMenuItem("Upload one file per one request",actionPerformed = OnClick) #menu item
+        Upload_all_file = JMenuItem("Upload all files per one request",actionPerformed = OnClick) #menu item
+        file.add(Upload_one_file) # add menu item
+        file.add(Upload_all_file) # add menu item
+        bar.add(file) # add menu
+        upload_mode_panel.add(bar) # add menu to panel
+        # end menu
+        
+        # payload position panel
+        payload_position_panel = JPanel(BorderLayout())
+        payload_position_label = self.createTopicLabel("Payload position")
+        payload_position_panel.add(payload_position_label)
+        self.positions_panel.add(payload_position_panel)
+        # payload target panel
+        payload_target_panel = JPanel(BorderLayout())
+        payload_target_textarea = JTextArea(50, 50)
+        payload_target_panel.add(payload_target_textarea)
+        self.positions_panel.add(payload_target_panel)
+        
+        
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         ### PAYLOADS ###############
 
@@ -144,27 +267,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # Create the JList to display current file
         self.file_label = JLabel(self.payload_files.getElementAt(self.current_index))
         print(self.payload_files.getElementAt(self.current_index))
-
-        def getResponseHeadersAndBody(self, content):
-            response = content.getResponse()
-            response_data = self._helpers.analyzeResponse(response)
-            headers = list(response_data.getHeaders() or "")
-            body = response[response_data.getBodyOffset() :].tostring()
-            return headers, body
-
-        def processHttpMessage(self, tool, is_request, content):
-            if is_request:
-                return
-            headers, body = self.getResponseHeadersAndBody(content)
-
-            # modify body
-            body = body.replace(" the Cloud", " my Butt")
-            body = body.replace(" the cloud", " my butt")
-            body = body.replace(" Cloud", " Butt")
-            body = body.replace(" cloud", " butt")
-
-            new_message = self._helpers.buildHttpMessage(headers, body)
-            content.setResponse(new_message)
 
         # Request preview mornitoring
         self.preview_textarea = JTextArea(10, 50)
@@ -272,7 +374,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     ### MAIN METHODS ###############
     def start_upload(self, event):
         pass
-
     def createTopicLabel(self, topic_text, increaseSizeBy=4):  # return JLabel
         # Set topic
         label = JLabel("> " + topic_text + " <")
