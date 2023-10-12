@@ -1,5 +1,6 @@
 from burp import IBurpExtender, ITab
-from javax.swing import JPanel, JTabbedPane, JButton, JFileChooser, JList, JScrollPane, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, SwingUtilities
+from javax.swing import JFrame, JPanel, JTabbedPane, JTable, JButton, JScrollPane, JFileChooser, JList, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, SwingUtilities
+from javax.swing.table import DefaultTableModel
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 
 # Redo the file from the beginning, so that I understand the entire process of how javax.swing and java.awt works
@@ -19,6 +20,26 @@ class BurpExtender(IBurpExtender, ITab):
 
         # ====================== HISTORY PANEL ======================
 
+        # Test data for the table
+        test_data = [["1", "www.google.com"], ["2", "www.youtube.com"]]
+
+        # Column names
+        column_names = ["#", "URL", "Method", "File Path", "Status Code", "Length", "Time"]
+
+        # Add table model
+        self.table_model = DefaultTableModel(test_data, column_names)
+
+        # Create a table based on the model
+        self.table = JTable(self.table_model)
+
+        # Create a scroll pane to hold the table
+        scroll_pane = JScrollPane(self.table)
+
+        # Create a panel and set its layout
+        self.history_panel = JPanel()
+        self.history_panel.setLayout(BorderLayout())
+        self.history_panel.add(scroll_pane, BorderLayout.CENTER)
+        """
         # Add create history panel in Jpanel() using GridLayout() format
         self.history_panel = JPanel() 
         self.history_panel.setLayout(GridLayout(4,4)) # GridLayout(rows, columns)
@@ -29,7 +50,8 @@ class BurpExtender(IBurpExtender, ITab):
             for j in range(1,5):
                 k = k + 1
                 self.history_panel.add(JButton("Grid " + str(k)))
-
+        """
+                
         # ====================== MAIN PANEL =========================
 
         # Add tabs to the tabbedPane
