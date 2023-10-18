@@ -1,5 +1,5 @@
 from burp import IBurpExtender, ITab
-from javax.swing import JFrame, JPanel, JTabbedPane, JTable, JButton, JScrollPane, JFileChooser, JList, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, SwingUtilities
+from javax.swing import JPanel, JTabbedPane, JTable, JButton, JScrollPane, BorderFactory,JFileChooser, JList, DefaultListModel, JTextArea, JLabel, BoxLayout, JFrame, SwingUtilities
 from javax.swing.table import DefaultTableModel
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 
@@ -20,6 +20,11 @@ class BurpExtender(IBurpExtender, ITab):
 
         # ====================== HISTORY PANEL ======================
 
+        # Create a panel to hold the table and add a border to it
+        table_panel = JPanel(BorderLayout())
+        # Add an empty border with padding around the panel, (TOP, LEFT, BOTTOM, RIGHT)
+        table_panel.setBorder(BorderFactory.createEmptyBorder(10, 25, 25, 25))  # Adjust the values for padding
+
         # Test data for the table
         test_data = [["1", "www.google.com"], ["2", "www.youtube.com"]]
 
@@ -35,23 +40,32 @@ class BurpExtender(IBurpExtender, ITab):
         # Create a scroll pane to hold the table
         scroll_pane = JScrollPane(self.table)
 
+        # Add the scroll pane to the table panel
+        table_panel.add(scroll_pane, BorderLayout.CENTER)
+
         # Create a panel and set its layout
         self.history_panel = JPanel()
         self.history_panel.setLayout(BorderLayout())
-        self.history_panel.add(scroll_pane, BorderLayout.CENTER)
-        """
-        # Add create history panel in Jpanel() using GridLayout() format
-        self.history_panel = JPanel() 
-        self.history_panel.setLayout(GridLayout(4,4)) # GridLayout(rows, columns)
 
-        k = 0
+        # Add the table panel to the history panel
+        self.history_panel.add(table_panel, BorderLayout.CENTER)
 
-        for i in range(1,5):
-            for j in range(1,5):
-                k = k + 1
-                self.history_panel.add(JButton("Grid " + str(k)))
-        """
-                
+
+        # =========== Start Upload Button in History panel ================
+
+        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+
+        # Add an empty border with padding around the panel, (TOP, LEFT, BOTTOM, RIGHT)
+        start_upload_panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 0, 20))  # Adjust the values for padding
+
+        self.start_upload_button = JButton("Start upload", actionPerformed=self.start_upload)
+        self.start_upload_button.setBackground(Color(255, 102, 51))
+        self.start_upload_button.setForeground(Color.WHITE)
+        self.start_upload_button.setFont(Font(self.start_upload_button.getFont().getName(), Font.BOLD, self.start_upload_button.getFont().getSize()))
+        start_upload_panel.add(self.start_upload_button)
+        # Add the top panel to the main panel at the NORTH position
+        self.history_panel.add(start_upload_panel, BorderLayout.NORTH)
+
         # ====================== MAIN PANEL =========================
 
         # Add tabs to the tabbedPane
@@ -73,3 +87,8 @@ class BurpExtender(IBurpExtender, ITab):
 
     def getUiComponent(self):
         return self.main_panel
+    
+    # ====================== Main Method ======================
+
+    def start_upload(self, event):
+        pass
