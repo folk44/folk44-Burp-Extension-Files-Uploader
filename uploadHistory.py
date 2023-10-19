@@ -47,6 +47,9 @@ class BurpExtender(IBurpExtender, ITab):
         self.history_panel = JPanel()
         self.history_panel.setLayout(BorderLayout())
 
+        # Set preferred size for the history panel to take up half of the vertical space
+        self.history_panel.setPreferredSize(Dimension(self.history_panel.getPreferredSize().width, 300))
+
         # Add the table panel to the history panel
         self.history_panel.add(table_panel, BorderLayout.CENTER)
 
@@ -65,6 +68,33 @@ class BurpExtender(IBurpExtender, ITab):
         start_upload_panel.add(self.start_upload_button)
         # Add the top panel to the main panel at the NORTH position
         self.history_panel.add(start_upload_panel, BorderLayout.NORTH)
+
+        # ====================== REQUEST, RESPONSE, INSPECTOR PANELS ======================
+
+        # Create panels for request, response, and inspector
+        request_panel = JPanel(BorderLayout())
+        response_panel = JPanel(BorderLayout())
+        inspector_panel = JPanel(BorderLayout())
+
+        # Create text areas for request, response, and inspector
+        request_text_area = JTextArea()
+        response_text_area = JTextArea()
+        inspector_text_area = JTextArea()
+
+        # Add text areas to the panels
+        request_panel.add(JLabel("Request:"), BorderLayout.NORTH)
+        request_panel.add(request_text_area, BorderLayout.CENTER)
+
+        response_panel.add(JLabel("Response:"), BorderLayout.NORTH)
+        response_panel.add(response_text_area, BorderLayout.CENTER)
+
+        inspector_panel.add(JLabel("Inspector:"), BorderLayout.NORTH)
+        inspector_panel.add(inspector_text_area, BorderLayout.CENTER)
+
+        # Add the request, response, and inspector panels to the history panel
+        self.history_panel.add(request_panel, BorderLayout.SOUTH)
+        self.history_panel.add(response_panel, BorderLayout.SOUTH)
+        self.history_panel.add(inspector_panel, BorderLayout.SOUTH)
 
         # ====================== MAIN PANEL =========================
 
