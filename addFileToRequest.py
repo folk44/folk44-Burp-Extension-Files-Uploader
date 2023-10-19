@@ -2,9 +2,10 @@ import re
 import subprocess
 import json
 import requests
+import exiftool
 
 requestFilePath = "request.txt"
-fileUpload = "Myfilecopy.png"
+fileUpload = "small_file.docx"
 outputPath = "output_file.bin"
 flagMode = 0 # flag_mode = 0 (no boundary), 1 (have boundary)
 
@@ -14,11 +15,8 @@ flagMode = 0 # flag_mode = 0 (no boundary), 1 (have boundary)
 def read_request(requestFilePath):
     with open(requestFilePath, 'rb') as file:
         data = file.read()
-        # print(type(data)) # Binary
-        # print(data)
         file.close()
         return data # Binary
-# print(read_request(requestFilePath))
 
 
 def get_http_method(requestFilePath):
@@ -94,6 +92,12 @@ def get_all_file_info(filename):
         print(f"Error running exiftool: {e}")
         return None
 
+# def get_all_file_info(filename):
+#     with exiftool.ExifTool() as et:
+#         metadata = et.get_metadata_batch([filename])
+#     return metadata[0] if metadata else None
+
+
 def get_file_info(filename, keys_list=["FileName", "MIMEType"]):
     info = get_all_file_info(filename)
     if info is None:
@@ -104,6 +108,7 @@ def get_file_info(filename, keys_list=["FileName", "MIMEType"]):
     except Exception as e:
         print(e)
         return None
+
 
 def get_files_info(filenames, keys_list=["FileName", "MIMEType"]):
     all_files_info = []
@@ -188,69 +193,4 @@ def change_file(requestFilePath, fileUpload):
 
 
 change_file(requestFilePath, fileUpload)
-
-
-# fileInfo = get_file_info(fileUpload) # List
-
-
-# boundary_value, EOR = get_boundary(requestFilePath)
-# print(boundary_value)
-# getBoundary(requestFilePath)
-
-
-
-# import requests
-
-# # Create a Request object without sending it
-# req = requests.Request(
-#     method='POST',
-#     url='127.0.0.1/',
-#     data={
-#         'param1': 'value1',
-#         'param2': 'value2'
-#     },
-#     files={
-#         'file': ('filename.ext', open('Myfilecopy.png', 'rb'))
-#     },
-#     headers={
-#         'User-Agent': 'MyApp/1.0'
-#     }
-# )
-
-# # Use a session to prepare the request
-# prepared_req = req.prepare()
-
-# # Now you can inspect various properties of the prepared request
-# print("Method:", prepared_req.method)
-# print("URL:", prepared_req.url)
-# print("Headers:", prepared_req.headers)
-# print("Body:", prepared_req.body)  # Note: this may be in bytes
-
-# # Prompt the user for confirmation
-# confirm = input("Do you want to send the request? (yes/no): ")
-# if confirm.lower() == 'yes':
-#     with requests.Session() as s:
-#         response = s.send(prepared_req)
-#         print(response.text)
-
-
-
-# import requests
-
-# def send_file_to_server(file_path, url):
-#     # Define the proxies to route through Burp Suite
-#     proxies = {
-#         "http": "http://127.0.0.1:8080",
-#         "https": "https://127.0.0.1:8080",
-#     }
-
-#     # Open the file in binary mode and send it as part of a multipart/form-data POST request
-#     with open(file_path, 'rb') as f:
-#         files = {'file': (file_path.split('/')[-1], f)} # get file name form path  # <class 'dict'>
-#         response = requests.post(url, files=files, proxies=proxies)
-#     return response.text
-
-# if __name__ == '__main__':
-#     file_path = file_upload # Change this to the path of your file
-#     url = 'http://foophones.securitybrigade.com:8080/register_confirm.php' # Change this to your server's URL
-#     print(send_file_to_server(file_path, url))
+# print(get_all_file_info(fileUpload))

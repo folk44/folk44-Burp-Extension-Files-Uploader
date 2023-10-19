@@ -4,19 +4,6 @@ User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 F
 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
 Accept-Language: en-US,en;q=0.5
 Accept-Encoding: gzip, deflate, br
-Content-Type: multipart/form-data; boundary=---------------------------16306166251406623891752783592
-Content-Length: 15052
-Origin: http://foophones.securitybrigade.com:8080
-Connection: close
-Referer: http://foophones.securitybrigade.com:8080/register.php
-Upgrade-Insecure-Requests: 1
-
-POST /register_confirm.php HTTP/1.1
-Host: foophones.securitybrigade.com:8080
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/118.0
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
-Accept-Language: en-US,en;q=0.5
-Accept-Encoding: gzip, deflate, br
 Content-Type: multipart/form-data; boundary=---------------------------385572269118894341192347970005
 Content-Length: 15050
 Origin: http://foophones.securitybrigade.com:8080
