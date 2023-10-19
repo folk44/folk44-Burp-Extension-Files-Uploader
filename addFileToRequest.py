@@ -5,7 +5,7 @@ import requests
 import exiftool
 
 requestFilePath = "request.txt"
-fileUpload = "small_file.docx"
+fileUpload = "Files_Test/small_file.pdf"
 outputPath = "output_file.bin"
 flagMode = 0 # flag_mode = 0 (no boundary), 1 (have boundary)
 
