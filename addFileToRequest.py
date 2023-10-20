@@ -2,10 +2,10 @@ import re
 import subprocess
 import json
 import requests
-import exiftool
+import tempfile
 
 requestFilePath = "request.txt"
-fileUpload = "Files_Test/small_file.pdf"
+fileUpload = "Files_Test/file.pdf" # For now support image, audio, video, and PDF metadata only
 outputPath = "output_file.bin"
 flagMode = 0 # flag_mode = 0 (no boundary), 1 (have boundary)
 
@@ -38,15 +38,15 @@ def get_boundary(requestFilePath):
     
     if match:
         boundary_value = match.group(1)
-        print("boundary=", boundary_value.decode('utf-8', 'ignore'))
+        # print("boundary=", boundary_value.decode('utf-8', 'ignore'))
         return boundary_value # binary
     else:
         print("Boundary value not found!")
         return None
 
 
-def add_new_part(new_filename, new_content_type, new_binary_content):
-    return b'\r\n' + \
+def add_new_part(boundary, new_filename, new_content_type, new_binary_content):
+    return boundary + b'\r\n' + \
            b'Content-Disposition: form-data; name="file"; filename=' + new_filename + b'\r\n' + \
            b'Content-Type: ' + new_content_type + b'\r\n\r\n' + \
            new_binary_content + b'\r\n'
@@ -91,11 +91,6 @@ def get_all_file_info(filename):
     except subprocess.CalledProcessError as e:
         print(f"Error running exiftool: {e}")
         return None
-
-# def get_all_file_info(filename):
-#     with exiftool.ExifTool() as et:
-#         metadata = et.get_metadata_batch([filename])
-#     return metadata[0] if metadata else None
 
 
 def get_file_info(filename, keys_list=["FileName", "MIMEType"]):
@@ -164,33 +159,36 @@ def change_file(requestFilePath, fileUpload):
     
     edited = False # To keep track if any part was edited
     already_edited = False  # To monitor if we've edited a "filename=" part
-    edited_parts = []
-    for part in parts:
-        if b'filename=' in part and not already_edited:
-            edited_part = edit_part(part, new_file_info[0], new_file_info[1], new_file_content)
-            edited_parts.append(edited_part)
-            edited = True
-            already_edited = True
-        else:
-            edited_parts.append(part)
+    # Create a temporary file to store edited parts
+    with tempfile.TemporaryFile() as temp_file:
+        for part in parts:
+            if b'filename=' in part and not already_edited:
+                edited_part = edit_part(part, new_file_info[0], new_file_info[1], new_file_content)
+                temp_file.write(start_boundary + edited_part)
+                already_edited = True
+                edited = True
+            else:
+                temp_file.write(start_boundary + part)
 
-    if not edited:
-        new_part = add_new_part(new_file_info[0], new_file_info[1], new_file_content)
-        edited_parts.append(new_part)
+        # Check if no part was edited, then append the new part before the footer
+        if not edited:
+            new_part = add_new_part(start_boundary, new_file_info[0], new_file_info[1], new_file_content)
+            temp_file.write(new_part)
 
-    # Reconstruct the entire message
-    header = request[:start_index+4]
-    footer = end_boundary
-    final_message = header + start_boundary + start_boundary.join(edited_parts) + footer
+        # Move file pointer to start of the temp_file
+        temp_file.seek(0)
 
-    # If you want to save the final_message to a file
-    with open(outputPath, 'wb') as f:
-        f.write(final_message)
-        f.close()
+        # Construct final_message
+        header = request[:start_index+4]
+        edited_data = temp_file.read()
+        footer = start_boundary + b'--\r\n'
+        final_message = header + edited_data + footer
 
-    # If you want to inspect the final_message in the console
-    print(final_message.decode('utf-8', 'ignore'))
+        # Save the modified data to a new binary file
+        with open('output_file.bin', 'wb') as f:
+            f.write(final_message)
+    print(">>> Modify requst successful <<<")
+    
 
 
 change_file(requestFilePath, fileUpload)
-# print(get_all_file_info(fileUpload))
