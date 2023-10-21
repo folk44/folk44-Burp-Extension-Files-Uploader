@@ -1,11 +1,13 @@
+import os
 import re
 import subprocess
 import json
 import requests
 import tempfile
+import magic # pip install python-magic-bin
 
 requestFilePath = "request.txt"
-fileUpload = "Files_Test/file.pdf" # For now support image, audio, video, and PDF metadata only
+fileUpload = "Files_Test/file.docx" # For now support image, audio, video, and PDF metadata only
 outputPath = "output_file.bin"
 flagMode = 0 # flag_mode = 0 (no boundary), 1 (have boundary)
 
@@ -77,41 +79,14 @@ def edit_part(part, new_filename, new_content_type, new_binary_content):
 
 
 # FILE UPLOAD #################       
-def get_all_file_info(filename):
-    try:
-        # Use ExifTool to extract metadata from the file
-        # The `-j` flag outputs the data in JSON format
-        result = subprocess.check_output(["exiftool", "-j", filename])
-
-        # Parse the JSON output
-        info = json.loads(result.decode('utf-8'))
-
-        # Return the first item in the list (as each file's info is a separate item in the list)
-        return info[0] # utf-8
-    except subprocess.CalledProcessError as e:
-        print(f"Error running exiftool: {e}")
-        return None
+def get_mime_type(filename):
+    mime = magic.Magic(mime=True)
+    return (mime.from_file(filename)).encode()
 
 
-def get_file_info(filename, keys_list=["FileName", "MIMEType"]):
-    info = get_all_file_info(filename)
-    if info is None:
-        return None
-    try:
-        extracted_values = [info[key] for key in keys_list if key in info]
-        return extracted_values # List (utf-8)
-    except Exception as e:
-        print(e)
-        return None
+def get_filename(filename):
+    return (os.path.basename(filename)).encode()
 
-
-def get_files_info(filenames, keys_list=["FileName", "MIMEType"]):
-    all_files_info = []
-    for filename in filenames:
-        file_info = get_file_info(filename, keys_list)
-        if file_info is not None:
-            all_files_info.append(file_info)
-    return all_files_info
 
 
 def read_file_upload(fileUpload):
@@ -154,7 +129,8 @@ def change_file(requestFilePath, fileUpload):
     parts = extracted_data.split(start_boundary)[1:]
      
     # Extract parts and edit (just edit some part containing "filename=<filename>")
-    new_file_info = [x.encode() for x in (get_file_info(fileUpload))] # converted to binary
+    new_filename = get_filename(fileUpload)
+    new_file_mime = get_mime_type(fileUpload)
     new_file_content = read_file_upload(fileUpload)
     
     edited = False # To keep track if any part was edited
@@ -163,7 +139,7 @@ def change_file(requestFilePath, fileUpload):
     with tempfile.TemporaryFile() as temp_file:
         for part in parts:
             if b'filename=' in part and not already_edited:
-                edited_part = edit_part(part, new_file_info[0], new_file_info[1], new_file_content)
+                edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
                 temp_file.write(start_boundary + edited_part)
                 already_edited = True
                 edited = True
@@ -172,7 +148,7 @@ def change_file(requestFilePath, fileUpload):
 
         # Check if no part was edited, then append the new part before the footer
         if not edited:
-            new_part = add_new_part(start_boundary, new_file_info[0], new_file_info[1], new_file_content)
+            new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
             temp_file.write(new_part)
 
         # Move file pointer to start of the temp_file
