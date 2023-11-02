@@ -32,34 +32,10 @@ from burp import IContextMenuFactory, IContextMenuInvocation
 from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
 from javax.swing import JMenuItem
+from java.util import ArrayList
 
 class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
-    # MENU ITEM
-    def createMenuItems(self, invocation): # for right click on request and send to our function
-        context = invocation.getInvocationContext()
-        menu = []
-        menu.append(
-            JMenuItem(
-                "Payloads",
-                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
-            )
-        )
-        menu.append(
-            JMenuItem(
-                "Positions",
-                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
-            )
-        )
-        menu.append(
-            JMenuItem(
-                "Upload History",
-                actionPerformed=lambda x, inv=invocation: self.copyUrl(x, inv),
-            )
-        )
-        if menu == []:
-            return
-        else:
-            return menu
+    
     def __init__(self):
         self.payload_files = DefaultListModel()
         self.payload_files.addElement(None)
@@ -68,7 +44,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
         self.callbacks = callbacks # set callbacks
         self.helpers = callbacks.getHelpers() # set helpers
-        callbacks.setExtensionName("File Uploader")  # setExtensionName
         callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory
         
 
@@ -150,10 +125,11 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # Payloads panel
         payload_position_label = self.createTopicLabel("Target")
         control_panel.add(payload_position_label, BorderLayout.WEST)
-        target_label = JTextArea()
-        target_label.setPreferredSize(Dimension(200, 20)) # set size
-        target_label.setBackground(Color(222, 222, 222))
-        control_panel.add(target_label, BorderLayout.WEST)
+
+        self.target_label = JTextArea()
+        self.target_label.setEditable(True)  # Make it uneditable
+        self.target_label.setPreferredSize(Dimension(200, 20)) # set size
+        control_panel.add(self.target_label, BorderLayout.WEST)
 
         # Preview panel
         preview_panel = JPanel(BorderLayout())
@@ -192,10 +168,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.positions_panel.add(split_panel, BorderLayout.CENTER)
 
         self.callbacks.customizeUiComponent(self.editor_viewposition)
-
-
-
-
 
 
 
@@ -390,3 +362,39 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         largerBoldFont = Font(currentFont.getName(), Font.BOLD, currentFont.getSize() + increaseSizeBy)
         label.setFont(largerBoldFont)
         return label
+    
+    # Create a context menu
+    def createMenuItems(self, invocation):
+        self._invocation = invocation
+        menuList = ArrayList()
+        menuItem = JMenuItem("Send to Positions", actionPerformed=self.sendToMyExtension)
+        menuList.add(menuItem)
+        return menuList
+    
+    # Handle the action when the context menu item is clicked
+    def sendToMyExtension(self, event):
+        http_traffic = self._invocation.getSelectedMessages()
+        for traffic in http_traffic:
+            header_bytes = traffic.getHost()
+            request_bytes = traffic.getRequest()
+            # Display request in the message editor
+            self.displayInMyExtension(header_bytes, request_bytes)
+    
+    # Display the request in the message editor
+    def displayInMyExtension(self, header_bytes, request_bytes):
+        print(header_bytes)
+        self.requestViewerforposition.setMessage(request_bytes, True)
+        self.target_label.setText(header_bytes)  # Set the header text
+
+    # These methods are required for the IMessageEditorController interface
+    def getHttpService(self):
+        return self._invocation.getSelectedMessages()[0].getHttpService()
+
+    def getHost(self):
+        return self._invocation.getSelectedMessages()[0].getHeaders()
+    
+    def getRequest(self):
+        return self._invocation.getSelectedMessages()[0].getRequest()
+
+    def getResponse(self):
+        return self._invocation.getSelectedMessages()[0].getResponse()
