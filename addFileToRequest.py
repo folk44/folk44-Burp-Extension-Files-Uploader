@@ -7,7 +7,7 @@ import tempfile
 import magic # pip install python-magic-bin
 
 requestFilePath = "request.txt"
-fileUpload = "Files_Test/file.docx" # For now support image, audio, video, and PDF metadata only
+fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
 outputPath = "output_file.bin"
 flagMode = 0 # flag_mode = 0 (no boundary), 1 (have boundary)
 
@@ -82,6 +82,12 @@ def edit_part(part, new_filename, new_content_type, new_binary_content):
 def get_mime_type(filename):
     mime = magic.Magic(mime=True)
     return (mime.from_file(filename)).encode()
+
+def get_content_length(filename):
+    with open(filename, 'rb') as file:
+        data = file.read()
+        content_length = len(data)
+        return content_length.encode()
 
 
 def get_filename(filename):
