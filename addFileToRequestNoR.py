@@ -10,8 +10,10 @@ requestFilePath = "request.txt"
 fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
 outputPath = "output_file.bin"
 fileUploadList = ["Files_Test/file.png", "Files_Test/s_file.pdf", "Files_Test/s_file.docx"]
-ModeFlag = 1 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
+ModeFlag = 2 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
 BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
+# Special character for separation, for example, a newline
+separator = b'\n--*--\n-*-*-\n-*-\n------*------\n-*-\n-*-*-\n--*--\n'
 
 
 
@@ -117,11 +119,9 @@ def generate_request(url, method, fileUpload):
     return response
 
 def post_bound(request, boundary, fileUploadList):
-    global ModeFlag
+    global ModeFlag, separator
     start_boundary = b'--' + boundary
     end_boundary = start_boundary + b'--'
-    # Special character for separation, for example, a newline
-    separator = b'\n--*--\n-*-*-\n-*-\n------*------\n-*-\n-*-*-\n--*--\n'
 
     if ModeFlag == 1:
         for index, file in enumerate(fileUploadList):
@@ -176,8 +176,57 @@ def post_bound(request, boundary, fileUploadList):
                         print(f"File number {index} was edited")
     
     elif ModeFlag==2:
-        for index, file in fileUploadList:
-            pass
+        fileIndex = 0
+        # Extract the data between \n\n and the ending sequence
+        start_index = request.find(b'\n\n')
+        end_index = request.find(end_boundary)
+        extracted_data = request[start_index+4:end_index]
+
+        # Split the extracted data using the specified delimiter
+        parts = extracted_data.split(start_boundary)[1:]
+        
+        edited = False
+        with tempfile.TemporaryFile() as temp_file:
+            for part in parts:
+                if fileUploadList[fileIndex]:
+                    # Extract parts and edit (just edit some part containing "filename=<filename>")
+                    new_filename = get_filename(fileUploadList[fileIndex])
+                    new_file_mime = get_mime_type(fileUploadList[fileIndex])
+                    new_file_content = read_file_upload(fileUploadList[fileIndex])
+                    if b'filename=' in part:
+                        edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                        temp_file.write(start_boundary + edited_part)
+                        edited = True
+                        fileIndex += 1
+                    else:
+                        temp_file.write(start_boundary + part)
+
+            # Check if no part was edited, then append the new part before the footer
+            while fileIndex < len(fileUploadList):# Extract parts and edit (just edit some part containing "filename=<filename>")
+                new_filename = get_filename(fileUploadList[fileIndex])
+                new_file_mime = get_mime_type(fileUploadList[fileIndex])
+                new_file_content = read_file_upload(fileUploadList[fileIndex])
+
+                new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
+                temp_file.write(new_part)
+                fileIndex += 1
+
+            # Move file pointer to start of the temp_file
+            temp_file.seek(0)
+
+            # Construct final_message
+            header = request[:start_index+4]
+            edited_data = temp_file.read()
+            footer = start_boundary + b'--\n'
+            final_message = header + edited_data + footer
+
+            # Save the modified data to a new binary file
+            with open('output_file.bin', 'wb') as f:
+                f.write(final_message)
+    
+    else:
+        print("Not support this mode")
+
 
 def change_file(requestFilePath, fileUploadList):
     if get_http_method(requestFilePath) == 'POST':
