@@ -13,7 +13,7 @@ fileUploadList = ["Files_Test/file.png", "Files_Test/s_file.pdf", "Files_Test/s_
 ModeFlag = 2 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
 BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
 # Special character for separation, for example, a newline
-separator = b'\n--*--\n-*-*-\n-*-\n------*------\n-*-\n-*-*-\n--*--\n'
+separator = b'\n--*--\n-*-*-\n-*-BurpExtensionByFolk44-*-\n-*-*-\n--*--\n'
 
 
 
@@ -88,10 +88,7 @@ def get_mime_type(filename):
     return (mime.from_file(filename)).encode()
 
 def get_content_length(filename):
-    with open(filename, 'rb') as file:
-        data = file.read()
-        content_length = len(data)
-        return content_length.encode()
+    return str(os.path.getsize(filename)).encode()
 
 def get_filename(filename):
     return (os.path.basename(filename)).encode()
@@ -123,12 +120,13 @@ def post_bound(request, boundary, fileUploadList):
     start_boundary = b'--' + boundary
     end_boundary = start_boundary + b'--'
 
+    # >>> One file per request <<<
     if ModeFlag == 1:
         for index, file in enumerate(fileUploadList):
             # Extract the data between \n\n and the ending sequence
             start_index = request.find(b'\n\n')
             end_index = request.find(end_boundary)
-            extracted_data = request[start_index+4:end_index]
+            extracted_data = request[start_index+2:end_index]
 
             # Split the extracted data using the specified delimiter
             parts = extracted_data.split(start_boundary)[1:]
@@ -160,7 +158,7 @@ def post_bound(request, boundary, fileUploadList):
                 temp_file.seek(0)
 
                 # Construct final_message
-                header = request[:start_index+4]
+                header = request[:start_index+2]
                 edited_data = temp_file.read()
                 footer = start_boundary + b'--\n'
                 final_message = header + edited_data + footer
@@ -169,18 +167,19 @@ def post_bound(request, boundary, fileUploadList):
                 if index == 0:
                     with open('output_file.bin', 'wb') as f:
                         f.write(final_message + separator)
-                        print(f"File number {index} was edited")
+                        print(f"File number {index} was added")
                 else:
                     with open('output_file.bin', 'ab') as f:
                         f.write(final_message + separator)
-                        print(f"File number {index} was edited")
+                        print(f"File number {index} was added")
     
+    # >>> All files in a request <<<
     elif ModeFlag==2:
         fileIndex = 0
         # Extract the data between \n\n and the ending sequence
         start_index = request.find(b'\n\n')
         end_index = request.find(end_boundary)
-        extracted_data = request[start_index+4:end_index]
+        extracted_data = request[start_index+2:end_index]
 
         # Split the extracted data using the specified delimiter
         parts = extracted_data.split(start_boundary)[1:]
@@ -215,7 +214,7 @@ def post_bound(request, boundary, fileUploadList):
             temp_file.seek(0)
 
             # Construct final_message
-            header = request[:start_index+4]
+            header = request[:start_index+2]
             edited_data = temp_file.read()
             footer = start_boundary + b'--\n'
             final_message = header + edited_data + footer
@@ -228,16 +227,54 @@ def post_bound(request, boundary, fileUploadList):
         print("Not support this mode")
 
 
+
+def post_unbound(request, fileUploadList):
+    global ModeFlag
+    ModeFlag = 1
+    for index, file in enumerate(fileUploadList):
+        # Extract parts between \n\n and the ending sequence
+        header, body = request.split(b'\n\n', 1)
+        header+= b'\n'
+        
+        # Replace or add Content-Type
+        if b"Content-Type:" in header:
+            header = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + get_mime_type(file), header)
+        else:
+            header += b"Content-Type: {}\n".format(get_mime_type(file))
+
+        # Replace or add Content-Length
+        if b"Content-Length:" in header:
+            header = re.sub(rb"Content-Length: \d+", b"Content-Length: " + get_content_length(file), header)
+        else:
+            header += b"Content-Length: {}\n".format(get_content_length(file))
+  
+
+        # Extract parts and edit (just edit some part containing "filename=<filename>")
+        body = read_file_upload(file)
+        final_message = header + b"\n" + body
+
+        # Save the modified data to a new binary file
+        if index == 0:
+            with open('output_file.bin', 'wb') as f:
+                f.write(final_message + separator)
+                print(f"File number {index} was edited")
+        else:
+            with open('output_file.bin', 'ab') as f:
+                f.write(final_message + separator)
+                print(f"File number {index} was edited")
+
+
 def change_file(requestFilePath, fileUploadList):
     if get_http_method(requestFilePath) == 'POST':
         # Original request
         request = read_request(requestFilePath)
         boundary = get_boundary(requestFilePath)
-        if boundary:
+        if boundary is not None:
             post_bound(request, boundary, fileUploadList)
             print(">>> Modify requst successful <<<")
         else:
-            pass
+            post_unbound(request, fileUploadList)
+            print(">>> Modify requst successful <<<")
 
     elif get_http_method(requestFilePath) == 'PUT':
         pass
