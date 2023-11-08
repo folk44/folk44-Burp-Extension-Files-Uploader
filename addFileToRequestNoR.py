@@ -14,6 +14,7 @@ ModeFlag = 2 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a
 BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
 # Special character for separation, for example, a newline
 separator = b'\n--*--\n-*-*-\n-*-BurpExtensionByFolk44-*-\n-*-*-\n--*--\n'
+modifiedFilename = "output_file.bin"
 
 
 
@@ -33,6 +34,7 @@ def get_http_method(requestFilePath):
             return match.group(1) # utf-8
         else:
             print("HTTP Method not found!")
+            return None
 
 def get_boundary(requestFilePath):
     global BoundaryFlag, ModeFlag
@@ -108,12 +110,43 @@ def save_binary_file(new_filename, content):
         f.close()
     print(f"Message saved to {new_filename}")
 
-def generate_request(url, method, fileUpload):
-    with open(fileUpload, 'rb') as file:
-        files = {'file': file}
-        # Using the 'request' function of the requests library to send a request with any method
-        response = requests.request(method.upper(), url, files=files)
-    return response
+def save_request_mode1(filename, index, message):
+    global separator
+    if index == 0:
+        with open(filename, 'wb') as f:
+            f.write(message + separator)
+            print(f"File number {index} was added")
+    else:
+        with open(filename, 'ab') as f:
+            f.write(message + separator)
+            print(f"File number {index} was added")
+
+def save_request_mode2(filename, message):
+    # Save the modified data to a new binary file
+    with open(filename, 'wb') as f:
+        f.write(message)
+
+def change_header_filename(part, method, new_filename):
+    # Regex to match the pattern
+    pattern = method + rb' (.*/).* (.+\n)'
+    part = re.sub(pattern, method + rb' \1' + new_filename + rb' \2', part)
+    return part
+
+def change_content_type(part, file):
+    # Replace or add Content-Type
+    if b"Content-Type:" in part:
+        part = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + get_mime_type(file), part)
+    else:
+        part += b"Content-Type: {}\n".format(get_mime_type(file))
+    return part
+
+def change_content_length(part, file):
+    # Replace or add Content-Length
+    if b"Content-Length:" in part:
+        part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + get_content_length(file), part)
+    else:
+        part += b"Content-Length: {}\n".format(get_content_length(file))
+    return part
 
 def post_bound(request, boundary, fileUploadList):
     global ModeFlag, separator
@@ -164,14 +197,7 @@ def post_bound(request, boundary, fileUploadList):
                 final_message = header + edited_data + footer
 
                 # Save the modified data to a new binary file
-                if index == 0:
-                    with open('output_file.bin', 'wb') as f:
-                        f.write(final_message + separator)
-                        print(f"File number {index} was added")
-                else:
-                    with open('output_file.bin', 'ab') as f:
-                        f.write(final_message + separator)
-                        print(f"File number {index} was added")
+                save_request_mode1(modifiedFilename, index, final_message)
     
     # >>> All files in a request <<<
     elif ModeFlag==2:
@@ -220,8 +246,7 @@ def post_bound(request, boundary, fileUploadList):
             final_message = header + edited_data + footer
 
             # Save the modified data to a new binary file
-            with open('output_file.bin', 'wb') as f:
-                f.write(final_message)
+            save_request_mode2(modifiedFilename, final_message)
     
     else:
         print("Not support this mode")
@@ -237,38 +262,52 @@ def post_unbound(request, fileUploadList):
         header+= b'\n'
         
         # Replace or add Content-Type
-        if b"Content-Type:" in header:
-            header = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + get_mime_type(file), header)
-        else:
-            header += b"Content-Type: {}\n".format(get_mime_type(file))
+        header = change_content_type(header, file)
 
         # Replace or add Content-Length
-        if b"Content-Length:" in header:
-            header = re.sub(rb"Content-Length: \d+", b"Content-Length: " + get_content_length(file), header)
-        else:
-            header += b"Content-Length: {}\n".format(get_content_length(file))
+        header = change_content_length(header, file)
   
-
         # Extract parts and edit (just edit some part containing "filename=<filename>")
         body = read_file_upload(file)
         final_message = header + b"\n" + body
 
         # Save the modified data to a new binary file
-        if index == 0:
-            with open('output_file.bin', 'wb') as f:
-                f.write(final_message + separator)
-                print(f"File number {index} was edited")
-        else:
-            with open('output_file.bin', 'ab') as f:
-                f.write(final_message + separator)
-                print(f"File number {index} was edited")
+        save_request_mode1(modifiedFilename, index, final_message)
+
+
+
+def put(request, fileUploadList):
+    global ModeFlag
+    ModeFlag = 1
+    for index, file in enumerate(fileUploadList):
+        # Extract parts between \n\n and the ending sequence
+        header, body = request.split(b'\n\n', 1)
+        header+= b'\n'
+
+        # Replace or add filename
+        header = change_header_filename(header, b"PUT", get_filename(file))
+
+        # Replace or add Content-Type
+        header = change_content_type(header, file)
+
+        # Replace or add Content-Length
+        header = change_content_length(header, file)
+  
+        # Extract parts and edit (just edit some part containing "filename=<filename>")
+        body = read_file_upload(file)
+        final_message = header + b"\n" + body
+
+        # Save the modified data to a new binary file
+        save_request_mode1(modifiedFilename, index, final_message)
+
 
 
 def change_file(requestFilePath, fileUploadList):
-    if get_http_method(requestFilePath) == 'POST':
-        # Original request
-        request = read_request(requestFilePath)
-        boundary = get_boundary(requestFilePath)
+    # Original request
+    request = read_request(requestFilePath)
+    boundary = get_boundary(requestFilePath)
+    method = get_http_method(requestFilePath)
+    if method == 'POST':
         if boundary is not None:
             post_bound(request, boundary, fileUploadList)
             print(">>> Modify requst successful <<<")
@@ -276,10 +315,11 @@ def change_file(requestFilePath, fileUploadList):
             post_unbound(request, fileUploadList)
             print(">>> Modify requst successful <<<")
 
-    elif get_http_method(requestFilePath) == 'PUT':
-        pass
+    elif method == 'PUT':
+        put(request, fileUploadList)
+        print(">>> Modify requst successful <<<")
 
-    elif get_http_method(requestFilePath) == 'PATCH':
+    elif method == 'PATCH':
         pass
 
     else:
