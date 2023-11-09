@@ -35,7 +35,7 @@ Content-Disposition: form-data; name="pass"
 Content-Disposition: form-data; name="avatar"; filename="Myfile.txt.png"
 Content-Type: image/png
 
-PNG
+PNG
 
 zsdfsgfjhdhajsrfhdgfhdgfhdxfghfghcx
 -----------------------------385572269118894341192347970005--

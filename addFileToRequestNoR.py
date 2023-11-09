@@ -9,7 +9,7 @@ import magic # pip install python-magic-bin
 requestFilePath = "request.txt"
 fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
 outputPath = "output_file.bin"
-fileUploadList = ["Files_Test/file.png", "Files_Test/s_file.pdf", "Files_Test/s_file.docx"]
+fileUploadList = ["Files_Test/file.json", "Files_Test/file.png","Files_Test/s_file.pdf", "Files_Test/s_file.docx"]
 ModeFlag = 1 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
 # BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
 # Special character for separation, for example, a newline
@@ -71,7 +71,7 @@ def edit_part(part, new_filename, new_content_type, new_binary_content):
         part = part[:position] + b'\nContent-Type: ' + new_content_type + part[position:]
     
     # Find the start position of old binary content
-    position = part.find(b'\n\n') + 4
+    position = part.find(b'\n\n') + 2
         # Find the end position of old binary content. If we're assuming that the old binary content ends 
         # just before the next boundary or the end of the part, we can use the end of the part as the position.
     end_position = len(part)
@@ -199,10 +199,11 @@ def post_bound(request, boundary, fileUploadList):
                 temp_file.seek(0)
 
                 # Construct final_message
-                header = request[:start_index+2]
+                header = request[:start_index+1]
                 edited_data = temp_file.read()
                 footer = start_boundary + b'--\n'
-                final_message = header + edited_data + footer
+                body = edited_data + footer
+                final_message = header + b'\n' + body
 
                 # Save the modified data to a new binary file
                 save_request_mode1(modifiedFilename, index, final_message)
