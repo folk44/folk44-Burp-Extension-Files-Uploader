@@ -25,12 +25,15 @@ from javax.swing import (JPanel,
     JViewport,
     JScrollBar,
     JSpinner,
-    JSpinner)
+    JSpinner,
+    JComboBox,
+    JOptionPane)
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 from burp import IHttpListener
 from burp import IContextMenuFactory, IContextMenuInvocation
 from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
+from java.awt.event import ActionListener
 from javax.swing import JMenuItem
 from java.util import ArrayList
 
@@ -40,13 +43,13 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.payload_files = DefaultListModel()
         self.payload_files.addElement(None)
         self.current_index = 0
+
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
         self.callbacks = callbacks # set callbacks
         self.helpers = callbacks.getHelpers() # set helpers
-        callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory
+        callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory 
         
-
         # creating a message editor from burp to show request 
         self.requestViewer = callbacks.createMessageEditor(None, True)
         self.requestViewerforposition = callbacks.createMessageEditor(None, True)
@@ -65,73 +68,61 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 ### POSITIONS ###############
         # Fill in the positions panel
         # main for positions is positions_panel
-        split_panel = JSplitPane(JSplitPane.VERTICAL_SPLIT)
-        split_panel.setDividerLocation(250)
-# Start upload button
-        start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        split_panel_position = JSplitPane(JSplitPane.VERTICAL_SPLIT)
+        split_panel_position.setDividerLocation(250)
+        split_panel_position.setBorder(None)
+
+    # Start upload button
+        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
         self.start_upload_button = JButton("Start upload", actionPerformed=self.start_upload)
         self.start_upload_button.setBackground(Color(255, 102, 51))
         self.start_upload_button.setForeground(Color.WHITE)
         self.start_upload_button.setFont(Font(self.start_upload_button.getFont().getName(), Font.BOLD, self.start_upload_button.getFont().getSize()))
-        start_upload__panel.add(self.start_upload_button)
+        start_upload_panel.add(self.start_upload_button)
         # Add the top panel to the main panel at the NORTH position
-        self.positions_panel.add(start_upload__panel, BorderLayout.NORTH)
-# Payloads panel
-        # Set topic
-        payload_setting_label = self.createTopicLabel("Upload Mode")
+        self.positions_panel.add(start_upload_panel, BorderLayout.NORTH)
+    
+    # Upload setting panel
+        upload_panel = JPanel(BorderLayout())
+        control_panel = JPanel(FlowLayout())
+        group_panel = JPanel(GridLayout(6,1))
+
+        # Upload Mode
+        upload_mode_label = self.createTopicLabel("Upload Mode")
+        self.upload_modes = ["Upload one file per request", "Upload all files in one request"]
+        upload_mode_combo = JComboBox(self.upload_modes)
+
+        # Add action listener to the combo box
+        upload_mode_listener = UploadModeActionListener(self, upload_modes=self.upload_modes)
+        upload_mode_combo.addActionListener(upload_mode_listener)
         
 
-        # Add buttons
-        self.add_payload_button = JButton("Add", actionPerformed=self.add_payload) # need to create function add_position
-        self.remove_payload_button = JButton("Auto", actionPerformed=self.remove_payload) # need to create function remove_position
-        self.clear_payload_button = JButton("Clear", actionPerformed=self.clear_payloads) # need to create function clear_position
-        self.preview_payload_button = JButton("Refresh", actionPerformed=self.generate_payloads) # need to create function refresh_position
-        self.payload_list = JList(self.payload_files)
+        # Payloads panel
+        target_setting_label = self.createTopicLabel("Target")
 
-        # Create JScrollPane with fixed size for self.payload_list
-        payload_list_scrollpane = JScrollPane(self.payload_list)
-        payload_list_scrollpane.setPreferredSize(Dimension(400, 150))  # Set the fixed size as desired
+        self.target_setting = JTextArea()
+        self.target_setting.setEditable(True)  # Make it uneditable
+        # self.target_setting.setPreferredSize(Dimension(300, 20)) # set size
 
-        upload_panel = JPanel(BorderLayout())
-        control_panel = JPanel(GridLayout(7, 1))
-        button_panel = JPanel(GridLayout(7, 1))
-        button_panel.add(self.add_payload_button)
-        button_panel.add(self.remove_payload_button)
-        button_panel.add(self.clear_payload_button)
-        button_panel.add(self.preview_payload_button)
-        upload_panel.add(button_panel, BorderLayout.EAST)
-        upload_panel.add(payload_setting_label, BorderLayout.NORTH)
+
+        scroll_pane = JScrollPane(self.target_setting)
+        scroll_pane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)  # Enable horizontal scrolling
+        scroll_pane.setPreferredSize(Dimension(500, 33))
+
+
+        group_panel.add(upload_mode_label)
+        group_panel.add(upload_mode_combo)
+        group_panel.add(target_setting_label)
+        group_panel.add(scroll_pane)
+
+        control_panel.add(group_panel)
+
         upload_panel.add(control_panel, BorderLayout.WEST)
         upload_panel.setMinimumSize(Dimension(200, 50))
         upload_panel.setMaximumSize(Dimension(600, 300))
 
-        
-        # menu
-        def OnClick(event):
-            txt.text = event.getActionCommand()
-        
-        bar = JMenuBar()
-        bar.setPreferredSize(Dimension(200, 20)) # set size
-        mode = JMenu()
-        mode.setPreferredSize(Dimension(200, 20)) # set size
-        Upload_one_file = JMenuItem("Upload one file per one request",actionPerformed = OnClick) #menu item
-        Upload_all_file = JMenuItem("Upload all files per one request",actionPerformed = OnClick) #menu item
-        mode.add(Upload_one_file) # add menu item
-        mode.add(Upload_all_file) # add menu item
-        bar.add(mode) # add menu
-        control_panel.add(bar) # add menu to panel
-        # end menu
 
-        # Payloads panel
-        payload_position_label = self.createTopicLabel("Target")
-        control_panel.add(payload_position_label, BorderLayout.WEST)
-
-        self.target_label = JTextArea()
-        self.target_label.setEditable(True)  # Make it uneditable
-        self.target_label.setPreferredSize(Dimension(200, 20)) # set size
-        control_panel.add(self.target_label, BorderLayout.WEST)
-
-        # Preview panel
+    # Request panel
         preview_panel = JPanel(BorderLayout())
 
         # Preview scrolling button
@@ -162,10 +153,10 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         preview_panel.setMinimumSize(Dimension(200, 50))
         preview_panel.setMaximumSize(Dimension(600, 300))
         
-        # Add 2 components to split_panel and add it to positions_panel
-        split_panel.setTopComponent(upload_panel)
-        split_panel.setBottomComponent(preview_panel)
-        self.positions_panel.add(split_panel, BorderLayout.CENTER)
+        # Add 2 components to split_panel_position and add it to positions_panel
+        split_panel_position.setTopComponent(upload_panel)
+        split_panel_position.setBottomComponent(preview_panel)
+        self.positions_panel.add(split_panel_position, BorderLayout.CENTER)
 
         self.callbacks.customizeUiComponent(self.editor_viewposition)
 
@@ -178,14 +169,14 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         split_panel.setBorder(None)
         
     # Start upload button
-        start_upload__panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
         self.start_upload_button = JButton("Start upload", actionPerformed=self.start_upload)
         self.start_upload_button.setBackground(Color(255, 102, 51))
         self.start_upload_button.setForeground(Color.WHITE)
         self.start_upload_button.setFont(Font(self.start_upload_button.getFont().getName(), Font.BOLD, self.start_upload_button.getFont().getSize()))
-        start_upload__panel.add(self.start_upload_button)
+        start_upload_panel.add(self.start_upload_button)
         # Add the top panel to the main panel at the NORTH position
-        self.payloads_panel.add(start_upload__panel, BorderLayout.NORTH)
+        self.payloads_panel.add(start_upload_panel, BorderLayout.NORTH)
 
     # Payloads panel
         # Set topic
@@ -286,6 +277,16 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     def set_position(self, event):
         # Placeholder: This is where the position setting logic will go
         pass
+
+
+### POSITIONS METHODS ###############
+    def setUploadMode(self, mode_name):
+        # Set internal state based on the selected upload mode name
+        if mode_name == self.upload_modes[0]:  # "Upload one file per request"
+            self.single_file_upload = True
+        elif mode_name == self.upload_modes[1]:  # "Upload all files in one request"
+            self.single_file_upload = False
+        print("Mode set to {}.".format(mode_name))
     
 
 ### PAYLOADS METHODS ############### 
@@ -375,16 +376,17 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     def sendToMyExtension(self, event):
         http_traffic = self._invocation.getSelectedMessages()
         for traffic in http_traffic:
+            protocal_bytes = traffic.getProtocol()
             header_bytes = traffic.getHost()
             request_bytes = traffic.getRequest()
             # Display request in the message editor
-            self.displayInMyExtension(header_bytes, request_bytes)
+            self.displayInMyExtension(protocal_bytes, header_bytes, request_bytes)
     
     # Display the request in the message editor
-    def displayInMyExtension(self, header_bytes, request_bytes):
-        print(header_bytes)
+    def displayInMyExtension(self, protocal_bytes, header_bytes, request_bytes):
+        print(protocal_bytes + header_bytes)
         self.requestViewerforposition.setMessage(request_bytes, True)
-        self.target_label.setText(header_bytes)  # Set the header text
+        self.target_setting.setText(protocal_bytes + b'://' + header_bytes)  # Set the header text
 
     # These methods are required for the IMessageEditorController interface
     def getHttpService(self):
@@ -398,3 +400,17 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
     def getResponse(self):
         return self._invocation.getSelectedMessages()[0].getResponse()
+
+
+class UploadModeActionListener(ActionListener):
+    def __init__(self, extender, upload_modes):
+        self._extender = extender
+        self._upload_modes = upload_modes
+
+    def actionPerformed(self, event):
+        combo_box = event.getSource()
+        selected_mode = combo_box.getSelectedItem()
+
+        # Pass the selected mode name to the setUploadMode method
+        self._extender.setUploadMode(selected_mode)
+
