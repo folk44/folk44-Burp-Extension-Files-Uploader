@@ -1,3 +1,11 @@
+import os
+import re
+import subprocess
+import json
+import requests
+import tempfile
+import magic # pip install python-magic-bin
+
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
 IMessageEditorTabFactory, IMessageEditorTab, IExtensionStateListener )
@@ -36,6 +44,7 @@ from java.awt.datatransfer import StringSelection
 from java.awt.event import ActionListener
 from javax.swing import JMenuItem
 from java.util import ArrayList
+
 
 class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
     
@@ -415,474 +424,498 @@ class UploadModeActionListener(ActionListener):
         self._extender.setUploadMode(selected_mode)
 
 
-class ModifyRequest():
-    import os
-import re
-import subprocess
-import json
-import requests
-import tempfile
-import magic # pip install python-magic-bin
+class ModifyRequest:
+    def __init__(self, request, fileUploadList, mode):
+        # fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
+        # outputPath = "output_file.bin"
+        # fileUploadList = ["Files_Test/file.json", "Files_Test/file.png","Files_Test/s_file.pdf", "Files_Test/s_file.docx"]
+        # ModeFlag = 0 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
+        # BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
+        # Special character for separation, for example, a newline
+        
+        self.requestFilePath = "request.bin"
+        self.separator = b'\n--*--\n-*-*-\n-*-BurpExtensionByFolk44-*-\n-*-*-\n--*--\n'
+        self.modifiedFilename = "output_file.bin"
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.part_files = []
 
-requestFilePath = "request.txt"
-fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
-outputPath = "output_file.bin"
-fileUploadList = ["Files_Test/file.json", "Files_Test/file.png","Files_Test/s_file.pdf", "Files_Test/s_file.docx"]
-ModeFlag = 1 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
-# BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
-# Special character for separation, for example, a newline
-separator = b'\n--*--\n-*-*-\n-*-BurpExtensionByFolk44-*-\n-*-*-\n--*--\n'
-modifiedFilename = "output_file.bin"
+        self.fileUploadList = fileUploadList # file path list
+        self.ModeFlag = mode # 1 (a file per request), 2 (all files in a request)
 
+        with open(request, 'wb') as request_file:
+            request_file.write(self.request)
 
+        self.boundary = get_boundary()
+        self.method = get_http_method()
+        self.request = read_request() # Binary
 
-# REQUEST #################
-def read_request(requestFilePath):
-    with open(requestFilePath, 'rb') as file:
-        data = file.read()
-        file.close()
-        return data # Binary
+    # REQUEST #################
+    def read_request(self):
+        with open(self.requestFilePath, 'rb') as file:
+            data = file.read()
+            file.close()
+            return data # Binary
 
-def get_http_method(requestFilePath):
-    with open(requestFilePath, 'rb') as f:
-        first_line = f.readline()
-        match = re.match(r'(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE|CONNECT)\s', first_line.decode('utf-8')) # \s matches any whitespace character, including tabs.
+    def get_http_method(self):
+        with open(self.requestFilePath, 'rb') as f:
+            first_line = f.readline()
+            match = re.match(r'(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE|CONNECT)\s', first_line.decode('utf-8')) # \s matches any whitespace character, including tabs.
+            if match:
+                return match.group(1) # utf-8
+            else:
+                print("HTTP Method not found!")
+                return None
+
+    def get_boundary(self):
+        # Regular expression to find the boundary value (adapted for bytes)
+        match = re.search(b'boundary=(.+?)\n', self.request)
+        
         if match:
-            return match.group(1) # utf-8
+            boundary_value = match.group(1)
+            # print("boundary=", boundary_value.decode('utf-8', 'ignore'))
+            return boundary_value # binary
         else:
-            print("HTTP Method not found!")
+            print("Have no boundary")
+            self.ModeFlag = 1
             return None
 
-def get_boundary(requestFilePath):
-    global BoundaryFlag, ModeFlag
-    content = read_request(requestFilePath)
+    def add_new_part(self, boundary, new_filename, new_content_type, new_binary_content):
+        return self.boundary + b'\n' + \
+            b'Content-Disposition: form-data; name="file"; filename=' + new_filename + b'\n' + \
+            b'Content-Type: ' + new_content_type + b'\n\n' + \
+            new_binary_content + b'\n'
 
-    # Regular expression to find the boundary value (adapted for bytes)
-    match = re.search(b'boundary=(.+?)\n', content)
-    
-    if match:
-        boundary_value = match.group(1)
-        # print("boundary=", boundary_value.decode('utf-8', 'ignore'))
-        BoundaryFlag = 1
-        return boundary_value # binary
-    else:
-        print("Have no boundary")
-        BoundaryFlag = 0
-        ModeFlag = 1
-        return None
+    def edit_part(self, part, new_filename, new_content_type, new_binary_content):
+        # Use regular expressions to identify and replace the filename and Content-Type
+        part = re.sub(b'(filename=")[^"]*(")', b'\\1' + new_filename + b'\\2', part)
+        
+        # Check if the Content-Type is present and replace it, otherwise add it
+        if b'Content-Type:' in part:
+            part = re.sub(b'(Content-Type: )[^\n]*', b'\\1' + new_content_type, part)
+        else:
+            position = part.find(b'\n\n')
+            part = part[:position] + b'\nContent-Type: ' + new_content_type + part[position:]
+        
+        # Find the start position of old binary content
+        position = part.find(b'\n\n') + 2
+            # Find the end position of old binary content. If we're assuming that the old binary content ends 
+            # just before the next boundary or the end of the part, we can use the end of the part as the position.
+        end_position = len(part)
 
-def add_new_part(boundary, new_filename, new_content_type, new_binary_content):
-    return boundary + b'\n' + \
-           b'Content-Disposition: form-data; name="file"; filename=' + new_filename + b'\n' + \
-           b'Content-Type: ' + new_content_type + b'\n\n' + \
-           new_binary_content + b'\n'
-
-def edit_part(part, new_filename, new_content_type, new_binary_content):
-    # Use regular expressions to identify and replace the filename and Content-Type
-    part = re.sub(b'(filename=")[^"]*(")', b'\\1' + new_filename + b'\\2', part)
-    
-    # Check if the Content-Type is present and replace it, otherwise add it
-    if b'Content-Type:' in part:
-        part = re.sub(b'(Content-Type: )[^\n]*', b'\\1' + new_content_type, part)
-    else:
-        position = part.find(b'\n\n')
-        part = part[:position] + b'\nContent-Type: ' + new_content_type + part[position:]
-    
-    # Find the start position of old binary content
-    position = part.find(b'\n\n') + 2
-        # Find the end position of old binary content. If we're assuming that the old binary content ends 
-        # just before the next boundary or the end of the part, we can use the end of the part as the position.
-    end_position = len(part)
-
-    # Replace the old content with new_binary_content
-    part = part[:position] + new_binary_content + b'\n' + part[end_position:]
-    
-    return part
+        # Replace the old content with new_binary_content
+        part = part[:position] + new_binary_content + b'\n' + part[end_position:]
+        
+        return part
 
 
 
-# FILE UPLOAD #################       
-def get_mime_type(filename):
-    mime = magic.Magic(mime=True)
-    return (mime.from_file(filename)).encode()
+    # FILE UPLOAD #################       
+    def get_mime_type(self, filename):
+        mime = magic.Magic(mime=True)
+        return (mime.from_file(filename)).encode()
 
-def get_content_length(filename):
-    return str(os.path.getsize(filename)).encode()
+    def get_content_length(self, filename):
+        return str(os.path.getsize(filename)).encode()
 
-def get_filename(filename):
-    return (os.path.basename(filename)).encode()
+    def get_filename(self, filename):
+        return (os.path.basename(filename)).encode()
 
-def read_file_upload(fileUpload):
-    with open(fileUpload, 'rb') as file:
-        data = file.read()
-        file.close()
-        return data # Binary
+    def read_file_upload(self, filename):
+        with open(filename, 'rb') as file:
+            content = file.read()
+            file.close()
+            return content # Binary
 
 
 
-# MAIN METHOD #################
-def save_binary_file(new_filename, content):
-    with open(new_filename, "wb") as f:
-        f.write(content)
-        f.close()
-    print(f"Message saved to {new_filename}")
+    # MAIN METHOD #################
+    def save_binary_file(self, new_filename, content):
+        with open(new_filename, "wb") as f:
+            f.write(content)
+            f.close()
+        print(f"Message saved to {new_filename}")
 
-def save_request_mode1(filename, index, message):
-    global separator
-    if index == 0:
+    def save_request_mode1(self, filename, index, message):
+        if index == 0:
+            with open(filename, 'wb') as f:
+                f.write(message + self.separator)
+                print(f"File number {index} was added")
+        else:
+            with open(filename, 'ab') as f:
+                f.write(message + self.separator)
+                print(f"File number {index} was added")
+
+    def save_request_mode2(self, filename, message):
+        # Save the modified data to a new binary file
         with open(filename, 'wb') as f:
-            f.write(message + separator)
-            print(f"File number {index} was added")
-    else:
-        with open(filename, 'ab') as f:
-            f.write(message + separator)
-            print(f"File number {index} was added")
+            f.write(message)
 
-def save_request_mode2(filename, message):
-    # Save the modified data to a new binary file
-    with open(filename, 'wb') as f:
-        f.write(message)
+    def change_header_filename(self, part, method, new_filename):
+        # Regex to match the pattern
+        pattern = self.method + rb' (.*/).* (.+\n)'
+        part = re.sub(pattern, self.method + rb' \1' + new_filename + rb' \2', part)
+        return part
 
-def change_header_filename(part, method, new_filename):
-    # Regex to match the pattern
-    pattern = method + rb' (.*/).* (.+\n)'
-    part = re.sub(pattern, method + rb' \1' + new_filename + rb' \2', part)
-    return part
-
-def change_content_type(part, file):
-    # Replace or add Content-Type
-    if b"Content-Type:" in part:
-        part = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + get_mime_type(file), part)
-    else:
-        part += b"Content-Type: {}\n".format(get_mime_type(file))
-    return part
-
-def change_content_length(part, length=0, file=None):
-    # Replace or add Content-Length
-    if file is not None:
-        if b"Content-Length:" in part:
-            part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + get_content_length(file), part)
+    def change_content_type(self, part, file):
+        # Replace or add Content-Type
+        if b"Content-Type:" in part:
+            part = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + get_mime_type(file), part)
         else:
-            part += b"Content-Length: " + get_content_length(file) + b'\n'
-    else:
-        if b"Content-Length:" in part:
-            part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + (str(length).encode()), part)
+            part += b"Content-Type: {}\n".format(get_mime_type(file))
+        return part
+
+    def change_content_length(self, part, length=0, file=None):
+        # Replace or add Content-Length
+        if file is not None:
+            if b"Content-Length:" in part:
+                part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + get_content_length(file), part)
+            else:
+                part += b"Content-Length: " + get_content_length(file) + b'\n'
         else:
-            part = part + b"Content-Length: " + (str(length).encode()) + b'\n'
-    return part
+            if b"Content-Length:" in part:
+                part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + (str(length).encode()), part)
+            else:
+                part = part + b"Content-Length: " + (str(length).encode()) + b'\n'
+        return part
 
 
 
-# Modifier #################
-def post_bound(request, boundary, fileUploadList):
-    global ModeFlag, separator
-    start_boundary = b'--' + boundary
-    end_boundary = start_boundary + b'--'
+    # Modifier #################
+    def post_bound(self):
+        start_boundary = b'--' + self.boundary
+        end_boundary = start_boundary + b'--'
 
-    # >>> One file per request <<<
-    if ModeFlag == 1:
-        for index, file in enumerate(fileUploadList):
+        # >>> One file per request <<<
+        if self.ModeFlag == 1:
+            for index, file in enumerate(self.fileUploadList):
+                # Extract the data between \n\n and the ending sequence
+                start_index = self.request.find(b'\n\n')
+                end_index = self.request.find(end_boundary)
+                extracted_data = self.request[start_index+2:end_index]
+
+                # Split the extracted data using the specified delimiter
+                parts = extracted_data.split(start_boundary)[1:]
+                
+                # Extract parts and edit (just edit some part containing "filename=<filename>")
+                new_filename = get_filename(file)
+                new_file_mime = get_mime_type(file)
+                new_file_content = read_file_upload(file)
+
+                edited = False # To keep track if any part was edited
+                already_edited = False  # To monitor if we've edited a "filename=" part
+                # Create a temporary file to store edited parts
+                with tempfile.TemporaryFile() as temp_file:
+                    for part in parts:
+                        if b'filename=' in part and not already_edited:
+                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            temp_file.write(start_boundary + edited_part)
+                            already_edited = True
+                            edited = True
+                        else:
+                            temp_file.write(start_boundary + part)
+
+                    # Check if no part was edited, then append the new part before the footer
+                    if not edited:
+                        new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
+                        temp_file.write(new_part)
+
+                    # Move file pointer to start of the temp_file
+                    temp_file.seek(0)
+
+                    # Construct final_message
+                    header = self.request[:start_index+1]
+                    edited_data = temp_file.read()
+                    footer = start_boundary + b'--\n'
+                    body = edited_data + footer
+                    final_message = header + b'\n' + body
+
+                    # Save the modified data to a new binary file
+                    save_request_mode1(modifiedFilename, index, final_message)
+        
+        # >>> All files in a request <<<
+        elif self.ModeFlag==2:
+            fileIndex = 0
             # Extract the data between \n\n and the ending sequence
-            start_index = request.find(b'\n\n')
-            end_index = request.find(end_boundary)
-            extracted_data = request[start_index+2:end_index]
+            start_index = self.request.find(b'\n\n')
+            end_index = self.equest.find(end_boundary)
+            extracted_data = self.request[start_index+2:end_index]
 
             # Split the extracted data using the specified delimiter
             parts = extracted_data.split(start_boundary)[1:]
             
-            # Extract parts and edit (just edit some part containing "filename=<filename>")
-            new_filename = get_filename(file)
-            new_file_mime = get_mime_type(file)
-            new_file_content = read_file_upload(file)
-
-            edited = False # To keep track if any part was edited
-            already_edited = False  # To monitor if we've edited a "filename=" part
-            # Create a temporary file to store edited parts
+            edited = False
             with tempfile.TemporaryFile() as temp_file:
                 for part in parts:
-                    if b'filename=' in part and not already_edited:
-                        edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
-                        temp_file.write(start_boundary + edited_part)
-                        already_edited = True
-                        edited = True
-                    else:
-                        temp_file.write(start_boundary + part)
+                    if self.fileUploadList[fileIndex]:
+                        # Extract parts and edit (just edit some part containing "filename=<filename>")
+                        new_filename = get_filename(self.fileUploadList[fileIndex])
+                        new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
+                        new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+                        if b'filename=' in part:
+                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            temp_file.write(start_boundary + edited_part)
+                            edited = True
+                            fileIndex += 1
+                        else:
+                            temp_file.write(start_boundary + part)
 
                 # Check if no part was edited, then append the new part before the footer
-                if not edited:
+                while fileIndex < len(self.fileUploadList):# Extract parts and edit (just edit some part containing "filename=<filename>")
+                    new_filename = get_filename(self.fileUploadList[fileIndex])
+                    new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
+                    new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+
                     new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
                     temp_file.write(new_part)
+                    fileIndex += 1
 
                 # Move file pointer to start of the temp_file
                 temp_file.seek(0)
 
                 # Construct final_message
-                header = request[:start_index+1]
+                header = self.request[:start_index+2]
                 edited_data = temp_file.read()
                 footer = start_boundary + b'--\n'
-                body = edited_data + footer
-                final_message = header + b'\n' + body
+                final_message = header + edited_data + footer
 
                 # Save the modified data to a new binary file
-                save_request_mode1(modifiedFilename, index, final_message)
-    
-    # >>> All files in a request <<<
-    elif ModeFlag==2:
-        fileIndex = 0
-        # Extract the data between \n\n and the ending sequence
-        start_index = request.find(b'\n\n')
-        end_index = request.find(end_boundary)
-        extracted_data = request[start_index+2:end_index]
-
-        # Split the extracted data using the specified delimiter
-        parts = extracted_data.split(start_boundary)[1:]
+                save_request_mode2(modifiedFilename, final_message)
         
-        edited = False
-        with tempfile.TemporaryFile() as temp_file:
-            for part in parts:
-                if fileUploadList[fileIndex]:
-                    # Extract parts and edit (just edit some part containing "filename=<filename>")
-                    new_filename = get_filename(fileUploadList[fileIndex])
-                    new_file_mime = get_mime_type(fileUploadList[fileIndex])
-                    new_file_content = read_file_upload(fileUploadList[fileIndex])
-                    if b'filename=' in part:
-                        edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
-                        temp_file.write(start_boundary + edited_part)
-                        edited = True
-                        fileIndex += 1
-                    else:
-                        temp_file.write(start_boundary + part)
+        else:
+            print("Not support this mode")
 
-            # Check if no part was edited, then append the new part before the footer
-            while fileIndex < len(fileUploadList):# Extract parts and edit (just edit some part containing "filename=<filename>")
-                new_filename = get_filename(fileUploadList[fileIndex])
-                new_file_mime = get_mime_type(fileUploadList[fileIndex])
-                new_file_content = read_file_upload(fileUploadList[fileIndex])
+    def post_unbound(self):
+        for index, file in enumerate(self.fileUploadList):
+            # Extract parts between \n\n and the ending sequence
+            header, body = self.request.split(b'\n\n', 1)
+            header+= b'\n'
+            
+            # Replace or add Content-Type
+            header = change_content_type(header, file)
 
-                new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
-                temp_file.write(new_part)
-                fileIndex += 1
-
-            # Move file pointer to start of the temp_file
-            temp_file.seek(0)
-
-            # Construct final_message
-            header = request[:start_index+2]
-            edited_data = temp_file.read()
-            footer = start_boundary + b'--\n'
-            final_message = header + edited_data + footer
+            # Replace or add Content-Length
+            header = change_content_length(header, file=file)
+    
+            # Extract parts and edit (just edit some part containing "filename=<filename>")
+            body = read_file_upload(file)
+            final_message = header + b"\n" + body
 
             # Save the modified data to a new binary file
-            save_request_mode2(modifiedFilename, final_message)
+            save_request_mode1(modifiedFilename, index, final_message)
+
+    def put(self):
+        for index, file in enumerate(self.fileUploadList):
+            # Extract parts between \n\n and the ending sequence
+            header, body = self.request.split(b'\n\n', 1)
+            header+= b'\n'
+
+            # Replace or add filename
+            header = change_header_filename(header, b"PUT", get_filename(file))
+
+            # Replace or add Content-Type
+            header = change_content_type(header, file)
+
+            # Replace or add Content-Length
+            header = change_content_length(header, file=file)
     
-    else:
-        print("Not support this mode")
+            # Extract parts and edit (just edit some part containing "filename=<filename>")
+            body = read_file_upload(file)
+            final_message = header + b"\n" + body
 
-def post_unbound(request, fileUploadList):
-    for index, file in enumerate(fileUploadList):
-        # Extract parts between \n\n and the ending sequence
-        header, body = request.split(b'\n\n', 1)
-        header+= b'\n'
+            # Save the modified data to a new binary file
+            save_request_mode1(modifiedFilename, index, final_message)
+
+    def patch_bound(self):
+        start_boundary = b'--' + self.boundary
+        end_boundary = start_boundary + b'--'
+
+        # >>> One file per request <<<
+        if self.ModeFlag == 1:
+            for index, file in enumerate(self.fileUploadList):
+                # Extract the data between \n\n and the ending sequence
+                start_index = self.request.find(b'\n\n')
+                end_index = self.request.find(end_boundary)
+                extracted_data = self.request[start_index+2:end_index]
+
+                # Split the extracted data using the specified delimiter
+                parts = extracted_data.split(start_boundary)[1:]
+                
+                # Extract parts and edit (just edit some part containing "filename=<filename>")
+                new_filename = get_filename(file)
+                new_file_mime = get_mime_type(file)
+                new_file_content = read_file_upload(file)
+
+                edited = False # To keep track if any part was edited
+                already_edited = False  # To monitor if we've edited a "filename=" part
+                # Create a temporary file to store edited parts
+                with tempfile.TemporaryFile() as temp_file:
+                    for part in parts:
+                        if b'filename=' in part and not already_edited:
+                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            temp_file.write(start_boundary + edited_part)
+                            already_edited = True
+                            edited = True
+                        else:
+                            temp_file.write(start_boundary + part)
+
+                    # Check if no part was edited, then append the new part before the footer
+                    if not edited:
+                        new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
+                        temp_file.write(new_part)
+
+                    # Move file pointer to start of the temp_file
+                    temp_file.seek(0)
+
+                    # Construct final_message
+                    header = self.request[:start_index+1]
+                    edited_data = temp_file.read()
+                    footer = start_boundary + b'--\n'
+                    body = edited_data + footer
+
+                    # Modify header
+                    header = change_content_length(header, length=len(body))
+
+                    final_message = header +b'\n' + body
+
+                    # Save the modified data to a new binary file
+                    save_request_mode1(modifiedFilename, index, final_message)
         
-        # Replace or add Content-Type
-        header = change_content_type(header, file)
-
-        # Replace or add Content-Length
-        header = change_content_length(header, file=file)
-  
-        # Extract parts and edit (just edit some part containing "filename=<filename>")
-        body = read_file_upload(file)
-        final_message = header + b"\n" + body
-
-        # Save the modified data to a new binary file
-        save_request_mode1(modifiedFilename, index, final_message)
-
-def put(request, fileUploadList):
-    for index, file in enumerate(fileUploadList):
-        # Extract parts between \n\n and the ending sequence
-        header, body = request.split(b'\n\n', 1)
-        header+= b'\n'
-
-        # Replace or add filename
-        header = change_header_filename(header, b"PUT", get_filename(file))
-
-        # Replace or add Content-Type
-        header = change_content_type(header, file)
-
-        # Replace or add Content-Length
-        header = change_content_length(header, file=file)
-  
-        # Extract parts and edit (just edit some part containing "filename=<filename>")
-        body = read_file_upload(file)
-        final_message = header + b"\n" + body
-
-        # Save the modified data to a new binary file
-        save_request_mode1(modifiedFilename, index, final_message)
-
-def patch_bound(request, boundary, fileUploadList):
-    global ModeFlag, separator
-    start_boundary = b'--' + boundary
-    end_boundary = start_boundary + b'--'
-
-    # >>> One file per request <<<
-    if ModeFlag == 1:
-        for index, file in enumerate(fileUploadList):
+        # >>> All files in a request <<<
+        elif self.ModeFlag==2:
+            fileIndex = 0
             # Extract the data between \n\n and the ending sequence
-            start_index = request.find(b'\n\n')
-            end_index = request.find(end_boundary)
-            extracted_data = request[start_index+2:end_index]
+            start_index = self.request.find(b'\n\n')
+            end_index = self.request.find(end_boundary)
+            extracted_data = self.request[start_index+2:end_index]
 
             # Split the extracted data using the specified delimiter
             parts = extracted_data.split(start_boundary)[1:]
             
-            # Extract parts and edit (just edit some part containing "filename=<filename>")
-            new_filename = get_filename(file)
-            new_file_mime = get_mime_type(file)
-            new_file_content = read_file_upload(file)
-
-            edited = False # To keep track if any part was edited
-            already_edited = False  # To monitor if we've edited a "filename=" part
-            # Create a temporary file to store edited parts
+            edited = False
             with tempfile.TemporaryFile() as temp_file:
                 for part in parts:
-                    if b'filename=' in part and not already_edited:
-                        edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
-                        temp_file.write(start_boundary + edited_part)
-                        already_edited = True
-                        edited = True
-                    else:
-                        temp_file.write(start_boundary + part)
+                    if self.fileUploadList[fileIndex]:
+                        # Extract parts and edit (just edit some part containing "filename=<filename>")
+                        new_filename = get_filename(self.fileUploadList[fileIndex])
+                        new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
+                        new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+                        if b'filename=' in part:
+                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            temp_file.write(start_boundary + edited_part)
+                            edited = True
+                            fileIndex += 1
+                        else:
+                            temp_file.write(start_boundary + part)
 
                 # Check if no part was edited, then append the new part before the footer
-                if not edited:
+                while fileIndex < len(self.fileUploadList):# Extract parts and edit (just edit some part containing "filename=<filename>")
+                    new_filename = get_filename(self.fileUploadList[fileIndex])
+                    new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
+                    new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+
                     new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
                     temp_file.write(new_part)
+                    fileIndex += 1
 
                 # Move file pointer to start of the temp_file
                 temp_file.seek(0)
 
                 # Construct final_message
-                header = request[:start_index+1]
+                header = self.request[:start_index+1]
                 edited_data = temp_file.read()
                 footer = start_boundary + b'--\n'
                 body = edited_data + footer
 
                 # Modify header
-                header = change_content_length(header, length=len(body))
+                header = change_content_length(body, length=len(body))
 
-                final_message = header +b'\n' + body
+                final_message = header + b'\n' + body
 
                 # Save the modified data to a new binary file
-                save_request_mode1(modifiedFilename, index, final_message)
-    
-    # >>> All files in a request <<<
-    elif ModeFlag==2:
-        fileIndex = 0
-        # Extract the data between \n\n and the ending sequence
-        start_index = request.find(b'\n\n')
-        end_index = request.find(end_boundary)
-        extracted_data = request[start_index+2:end_index]
-
-        # Split the extracted data using the specified delimiter
-        parts = extracted_data.split(start_boundary)[1:]
+                save_request_mode2(modifiedFilename, final_message)
         
-        edited = False
-        with tempfile.TemporaryFile() as temp_file:
-            for part in parts:
-                if fileUploadList[fileIndex]:
-                    # Extract parts and edit (just edit some part containing "filename=<filename>")
-                    new_filename = get_filename(fileUploadList[fileIndex])
-                    new_file_mime = get_mime_type(fileUploadList[fileIndex])
-                    new_file_content = read_file_upload(fileUploadList[fileIndex])
-                    if b'filename=' in part:
-                        edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
-                        temp_file.write(start_boundary + edited_part)
-                        edited = True
-                        fileIndex += 1
-                    else:
-                        temp_file.write(start_boundary + part)
+        else:
+            print("Not support this mode")
 
-            # Check if no part was edited, then append the new part before the footer
-            while fileIndex < len(fileUploadList):# Extract parts and edit (just edit some part containing "filename=<filename>")
-                new_filename = get_filename(fileUploadList[fileIndex])
-                new_file_mime = get_mime_type(fileUploadList[fileIndex])
-                new_file_content = read_file_upload(fileUploadList[fileIndex])
 
-                new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
-                temp_file.write(new_part)
-                fileIndex += 1
+    def patch_unbound(self):
+        for index, file in enumerate(self.fileUploadList):
+            # Extract parts between \n\n and the ending sequence
+            header, body = self.request.split(b'\n\n', 1)
+            header+= b'\n'
 
-            # Move file pointer to start of the temp_file
-            temp_file.seek(0)
+            # Replace or add filename
+            header = change_header_filename(header, b"PATCH", get_filename(file))
 
-            # Construct final_message
-            header = request[:start_index+1]
-            edited_data = temp_file.read()
-            footer = start_boundary + b'--\n'
-            body = edited_data + footer
+            # Replace or add Content-Type
+            header = change_content_type(header, file)
 
-            # Modify header
-            header = change_content_length(body, length=len(body))
-
-            final_message = header + b'\n' + body
+            # Replace or add Content-Length
+            header = change_content_length(header, file=file)
+    
+            # Extract parts and edit (just edit some part containing "filename=<filename>")
+            body = read_file_upload(file)
+            final_message = header + b"\n" + body
 
             # Save the modified data to a new binary file
-            save_request_mode2(modifiedFilename, final_message)
-    
-    else:
-        print("Not support this mode")
-
-
-def patch_unbound(request, fileUploadList):
-    for index, file in enumerate(fileUploadList):
-        # Extract parts between \n\n and the ending sequence
-        header, body = request.split(b'\n\n', 1)
-        header+= b'\n'
-
-        # Replace or add filename
-        header = change_header_filename(header, b"PATCH", get_filename(file))
-
-        # Replace or add Content-Type
-        header = change_content_type(header, file)
-
-        # Replace or add Content-Length
-        header = change_content_length(header, file=file)
-  
-        # Extract parts and edit (just edit some part containing "filename=<filename>")
-        body = read_file_upload(file)
-        final_message = header + b"\n" + body
-
-        # Save the modified data to a new binary file
-        save_request_mode1(modifiedFilename, index, final_message)
-    
-
-
-def change_file(requestFilePath, fileUploadList):
-    # Original request
-    request = read_request(requestFilePath)
-    boundary = get_boundary(requestFilePath)
-    method = get_http_method(requestFilePath)
-    if method == 'POST':
-        if boundary is not None:
-            post_bound(request, boundary, fileUploadList)
-            print(">>> Modify requst successful <<<")
-        else:
-            post_unbound(request, fileUploadList)
-            print(">>> Modify requst successful <<<")
-
-    elif method == 'PUT':
-        put(request, fileUploadList)
-        print(">>> Modify requst successful <<<")
-
-    elif method == 'PATCH':
-        if boundary is not None:
-            patch_bound(request, boundary, fileUploadList)
-            print(">>> Modify requst successful <<<")
-        else:
-            patch_unbound(request, fileUploadList)
-            print(">>> Modify requst successful <<<")
+            save_request_mode1(modifiedFilename, index, final_message)
         
-    else:
-        print(">>> Not found HTTP method supporting files uploading <<<")
+
+
+    def change_file(self):
+        if self.method == 'POST':
+            if self.boundary is not None:
+                post_bound()
+                print(">>> Modify requst successful <<<")
+            else:
+                post_unbound()
+                print(">>> Modify requst successful <<<")
+
+        elif self.method == 'PUT':
+            put()
+            print(">>> Modify requst successful <<<")
+
+        elif self.method == 'PATCH':
+            if self.boundary is not None:
+                patch_bound()
+                print(">>> Modify requst successful <<<")
+            else:
+                patch_unbound()
+                print(">>> Modify requst successful <<<")
+            
+        else:
+            print(">>> Not found HTTP method supporting files uploading <<<")
+
+    
+    # Get each part of request #################
+    def read_and_split_modified_request(self):
+        # Reads the file and splits it into parts, storing each part in a temporary file.
+        try:
+            with open(self.modifiedFilename, 'rb') as file:
+                content = file.read()
+
+            parts = content.split(self.separator)
+            for i, part in enumerate(parts):
+                part_file_path = os.path.join(self.temp_dir.name, f'part_{i}')
+                with open(part_file_path, 'wb') as part_file:
+                    part_file.write(part)
+                self.part_files.append(part_file_path)
+        except Exception as e:
+            raise IOError(f"An error occurred while reading the file: {e}")
+
+    def get_part(self, part_number):
+        # Returns the content of the requested part from the temporary file.
+        if not self.part_files:
+            self.read_and_split_modified_request()
+
+        if part_number < 1 or part_number > len(self.part_files):
+            return f"Invalid part number. There are only {len(self.part_files)} parts."
+
+        with open(self.part_files[part_number - 1], 'rb') as part_file:
+            return part_file.read()
+
+    def cleanup(self):
+        # Cleans up the temporary files and directory.
+        self.temp_dir.cleanup()
 
 
