@@ -52,6 +52,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.payload_files = DefaultListModel()
         self.payload_files.addElement(None)
         self.current_index = 0
+        self.request = None
+        self.mode = 1
+        self.upload_modes = ["Upload one file per request", "Upload all files in one request"]
 
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
@@ -60,8 +63,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory 
         
         # creating a message editor from burp to show request 
-        self.requestViewer = callbacks.createMessageEditor(None, True)
-        self.requestViewerforposition = callbacks.createMessageEditor(None, True)
+        self.requestViewerForPosition = callbacks.createMessageEditor(None, True)
+        self.requestViewerForPayload = callbacks.createMessageEditor(None, True)
+        self.requestViewerForHistory = callbacks.createMessageEditor(None, True)
         self.responseViewer = callbacks.createMessageEditor(None, True)
         
         # Main UI setup
@@ -98,7 +102,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
         # Upload Mode
         upload_mode_label = self.createTopicLabel("Upload Mode")
-        self.upload_modes = ["Upload one file per request", "Upload all files in one request"]
         upload_mode_combo = JComboBox(self.upload_modes)
 
         # Add action listener to the combo box
@@ -151,7 +154,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
         # Request preview mornitoring
         self.editor_viewposition = JTabbedPane()
-        self.editor_viewposition.addTab("Request", self.requestViewerforposition.getComponent())
+        self.editor_viewposition.addTab("Request", self.requestViewerForPosition.getComponent())
 
         # Group topic & scrolling button
         group_header_preview = JPanel(GridLayout(3,1))
@@ -239,7 +242,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
         # Request preview mornitoring
         self.editor_view = JTabbedPane()
-        self.editor_view.addTab("Request", self.requestViewer.getComponent())
+        self.editor_view.addTab("Request", self.requestViewerForPayload.getComponent())
 
         # Group topic & scrolling button
         group_header_preview = JPanel(GridLayout(3,1))
@@ -289,13 +292,17 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 
 ### POSITIONS METHODS ###############
+    # Set up mode when select mode at combobox
     def setUploadMode(self, mode_name):
         # Set internal state based on the selected upload mode name
         if mode_name == self.upload_modes[0]:  # "Upload one file per request"
-            self.single_file_upload = True
+            self.mode = 1
+            print("Mode set to {}.".format(mode_name))
         elif mode_name == self.upload_modes[1]:  # "Upload all files in one request"
-            self.single_file_upload = False
-        print("Mode set to {}.".format(mode_name))
+            self.mode = 2
+            print("Mode set to {}.".format(mode_name))
+        else:
+            print("Unknown Mode")
     
 
 ### PAYLOADS METHODS ############### 
@@ -335,7 +342,18 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.update_file_label()
     
     def generate_payloads(self, event):
-        pass
+        # Assuming requestViewerForPosition is your MessageEditor instance
+        self.request = self.requestViewerForPosition.getMessage()
+        if self.request is not None or len(self.request) != 0:
+            if self.payload_files is not None:
+                self.manageRequest = ModifyRequest(self.request, self.convert_to_list(self.payload_files), self.mode)
+                self.manageRequest.add_file()
+                self.requestViewerForPosition.setMessage(self.manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
+            else:
+                print("Payload files are not set")
+        else:
+            print("Please fill request in the text editor in position tab")
+
 
     def update_count(self):
         self.count_label.setText((str(int(self.current_index)) + "  of  " + str(self.payload_files.size()-1)))
@@ -349,13 +367,15 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             self.current_index -= 1
             self.update_count()
             self.update_file_label()
+            self.requestViewerForPosition.setMessage(self.manageRequest.get_part(self.current_index), True)
 
     def next_payload(self, event):
         if self.current_index < self.payload_files.size() - 1:
             self.current_index += 1
             self.update_count()
             self.update_file_label()
-    
+            self.requestViewerForPosition.setMessage(self.manageRequest.get_part(self.current_index), True)
+
 
 
 ### MAIN METHODS ###############
@@ -394,7 +414,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     # Display the request in the message editor
     def displayInMyExtension(self, protocal_bytes, header_bytes, request_bytes):
         print(protocal_bytes + header_bytes)
-        self.requestViewerforposition.setMessage(request_bytes, True)
+        self.requestViewerForPosition.setMessage(request_bytes, True)
         self.target_setting.setText(protocal_bytes + b'://' + header_bytes)  # Set the header text
 
     # These methods are required for the IMessageEditorController interface
@@ -445,9 +465,9 @@ class ModifyRequest:
         with open(request, 'wb') as request_file:
             request_file.write(self.request)
 
-        self.boundary = get_boundary()
-        self.method = get_http_method()
-        self.request = read_request() # Binary
+        self.boundary = self.get_boundary()
+        self.method = self.get_http_method()
+        self.request = self.read_request() # Binary
 
     # REQUEST #################
     def read_request(self):
@@ -533,17 +553,17 @@ class ModifyRequest:
         with open(new_filename, "wb") as f:
             f.write(content)
             f.close()
-        print(f"Message saved to {new_filename}")
+        print("Message saved to {}".format(new_filename))
 
     def save_request_mode1(self, filename, index, message):
         if index == 0:
             with open(filename, 'wb') as f:
                 f.write(message + self.separator)
-                print(f"File number {index} was added")
+                print("File number {} was added".format(index))
         else:
             with open(filename, 'ab') as f:
                 f.write(message + self.separator)
-                print(f"File number {index} was added")
+                print("File number {} was added".format(index))
 
     def save_request_mode2(self, filename, message):
         # Save the modified data to a new binary file
@@ -862,7 +882,7 @@ class ModifyRequest:
         
 
 
-    def change_file(self):
+    def add_file(self):
         if self.method == 'POST':
             if self.boundary is not None:
                 post_bound()
