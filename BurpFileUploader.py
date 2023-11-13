@@ -479,12 +479,14 @@ class ModifyRequest:
     def get_http_method(self):
         with open(self.requestFilePath, 'rb') as f:
             first_line = f.readline()
-            match = re.match(r'(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE|CONNECT)\s', first_line.decode('utf-8')) # \s matches any whitespace character, including tabs.
+            # Use a raw string with a single backslash for the whitespace character
+            match = re.match(r'(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE|CONNECT)\s', first_line.decode())
             if match:
-                return match.group(1) # utf-8
+                return match.group(1).encode()  # Binary
             else:
                 print("HTTP Method not found!")
                 return None
+
 
     def get_boundary(self):
         # Regular expression to find the boundary value (adapted for bytes)
@@ -570,7 +572,7 @@ class ModifyRequest:
         with open(filename, 'wb') as f:
             f.write(message)
 
-    def change_header_filename(self, part, method, new_filename):
+    def change_header_filename(self, part, new_filename):
         # Regex to match the pattern
         pattern = self.method + rb' (.*/).* (.+\n)'
         part = re.sub(pattern, self.method + rb' \1' + new_filename + rb' \2', part)
@@ -579,18 +581,18 @@ class ModifyRequest:
     def change_content_type(self, part, file):
         # Replace or add Content-Type
         if b"Content-Type:" in part:
-            part = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + get_mime_type(file), part)
+            part = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + self.get_mime_type(file), part)
         else:
-            part += b"Content-Type: {}\n".format(get_mime_type(file))
+            part += b"Content-Type: {}\n".format(self.get_mime_type(file))
         return part
 
     def change_content_length(self, part, length=0, file=None):
         # Replace or add Content-Length
         if file is not None:
             if b"Content-Length:" in part:
-                part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + get_content_length(file), part)
+                part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + self.get_content_length(file), part)
             else:
-                part += b"Content-Length: " + get_content_length(file) + b'\n'
+                part += b"Content-Length: " + self.get_content_length(file) + b'\n'
         else:
             if b"Content-Length:" in part:
                 part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + (str(length).encode()), part)
@@ -617,9 +619,9 @@ class ModifyRequest:
                 parts = extracted_data.split(start_boundary)[1:]
                 
                 # Extract parts and edit (just edit some part containing "filename=<filename>")
-                new_filename = get_filename(file)
-                new_file_mime = get_mime_type(file)
-                new_file_content = read_file_upload(file)
+                new_filename = self.get_filename(file)
+                new_file_mime = self.get_mime_type(file)
+                new_file_content = self.read_file_upload(file)
 
                 edited = False # To keep track if any part was edited
                 already_edited = False  # To monitor if we've edited a "filename=" part
@@ -627,7 +629,7 @@ class ModifyRequest:
                 with tempfile.TemporaryFile() as temp_file:
                     for part in parts:
                         if b'filename=' in part and not already_edited:
-                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            edited_part = self.edit_part(part, new_filename, new_file_mime, new_file_content)
                             temp_file.write(start_boundary + edited_part)
                             already_edited = True
                             edited = True
@@ -636,7 +638,7 @@ class ModifyRequest:
 
                     # Check if no part was edited, then append the new part before the footer
                     if not edited:
-                        new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
+                        new_part = self.add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
                         temp_file.write(new_part)
 
                     # Move file pointer to start of the temp_file
@@ -650,7 +652,7 @@ class ModifyRequest:
                     final_message = header + b'\n' + body
 
                     # Save the modified data to a new binary file
-                    save_request_mode1(modifiedFilename, index, final_message)
+                    self.save_request_mode1(self.modifiedFilename, index, final_message)
         
         # >>> All files in a request <<<
         elif self.ModeFlag==2:
@@ -668,11 +670,11 @@ class ModifyRequest:
                 for part in parts:
                     if self.fileUploadList[fileIndex]:
                         # Extract parts and edit (just edit some part containing "filename=<filename>")
-                        new_filename = get_filename(self.fileUploadList[fileIndex])
-                        new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
-                        new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+                        new_filename = self.get_filename(self.fileUploadList[fileIndex])
+                        new_file_mime = self.get_mime_type(self.fileUploadList[fileIndex])
+                        new_file_content = self.read_file_upload(self.fileUploadList[fileIndex])
                         if b'filename=' in part:
-                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            edited_part = self.edit_part(part, new_filename, new_file_mime, new_file_content)
                             temp_file.write(start_boundary + edited_part)
                             edited = True
                             fileIndex += 1
@@ -681,11 +683,11 @@ class ModifyRequest:
 
                 # Check if no part was edited, then append the new part before the footer
                 while fileIndex < len(self.fileUploadList):# Extract parts and edit (just edit some part containing "filename=<filename>")
-                    new_filename = get_filename(self.fileUploadList[fileIndex])
-                    new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
-                    new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+                    new_filename = self.get_filename(self.fileUploadList[fileIndex])
+                    new_file_mime = self.get_mime_type(self.fileUploadList[fileIndex])
+                    new_file_content = self.read_file_upload(self.fileUploadList[fileIndex])
 
-                    new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
+                    new_part = self.add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
                     temp_file.write(new_part)
                     fileIndex += 1
 
@@ -699,7 +701,7 @@ class ModifyRequest:
                 final_message = header + edited_data + footer
 
                 # Save the modified data to a new binary file
-                save_request_mode2(modifiedFilename, final_message)
+                self.save_request_mode2(self.modifiedFilename, final_message)
         
         else:
             print("Not support this mode")
@@ -711,17 +713,17 @@ class ModifyRequest:
             header+= b'\n'
             
             # Replace or add Content-Type
-            header = change_content_type(header, file)
+            header = self.change_content_type(header, file)
 
             # Replace or add Content-Length
-            header = change_content_length(header, file=file)
+            header = self.change_content_length(header, file=file)
     
             # Extract parts and edit (just edit some part containing "filename=<filename>")
-            body = read_file_upload(file)
+            body = self.read_file_upload(file)
             final_message = header + b"\n" + body
 
             # Save the modified data to a new binary file
-            save_request_mode1(modifiedFilename, index, final_message)
+            self.save_request_mode1(self.modifiedFilename, index, final_message)
 
     def put(self):
         for index, file in enumerate(self.fileUploadList):
@@ -730,20 +732,20 @@ class ModifyRequest:
             header+= b'\n'
 
             # Replace or add filename
-            header = change_header_filename(header, b"PUT", get_filename(file))
+            header = self.change_header_filename(header, self.get_filename(file))
 
             # Replace or add Content-Type
-            header = change_content_type(header, file)
+            header = self.change_content_type(header, file)
 
             # Replace or add Content-Length
-            header = change_content_length(header, file=file)
+            header = self.change_content_length(header, file=file)
     
             # Extract parts and edit (just edit some part containing "filename=<filename>")
-            body = read_file_upload(file)
+            body = self.read_file_upload(file)
             final_message = header + b"\n" + body
 
             # Save the modified data to a new binary file
-            save_request_mode1(modifiedFilename, index, final_message)
+            self.save_request_mode1(self.modifiedFilename, index, final_message)
 
     def patch_bound(self):
         start_boundary = b'--' + self.boundary
@@ -761,9 +763,9 @@ class ModifyRequest:
                 parts = extracted_data.split(start_boundary)[1:]
                 
                 # Extract parts and edit (just edit some part containing "filename=<filename>")
-                new_filename = get_filename(file)
-                new_file_mime = get_mime_type(file)
-                new_file_content = read_file_upload(file)
+                new_filename = self.get_filename(file)
+                new_file_mime = self.get_mime_type(file)
+                new_file_content = self.read_file_upload(file)
 
                 edited = False # To keep track if any part was edited
                 already_edited = False  # To monitor if we've edited a "filename=" part
@@ -771,7 +773,7 @@ class ModifyRequest:
                 with tempfile.TemporaryFile() as temp_file:
                     for part in parts:
                         if b'filename=' in part and not already_edited:
-                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            edited_part = self.edit_part(part, new_filename, new_file_mime, new_file_content)
                             temp_file.write(start_boundary + edited_part)
                             already_edited = True
                             edited = True
@@ -780,7 +782,7 @@ class ModifyRequest:
 
                     # Check if no part was edited, then append the new part before the footer
                     if not edited:
-                        new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
+                        new_part = self.add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
                         temp_file.write(new_part)
 
                     # Move file pointer to start of the temp_file
@@ -793,12 +795,12 @@ class ModifyRequest:
                     body = edited_data + footer
 
                     # Modify header
-                    header = change_content_length(header, length=len(body))
+                    header = self.change_content_length(header, length=len(body))
 
                     final_message = header +b'\n' + body
 
                     # Save the modified data to a new binary file
-                    save_request_mode1(modifiedFilename, index, final_message)
+                    self.save_request_mode1(self.modifiedFilename, index, final_message)
         
         # >>> All files in a request <<<
         elif self.ModeFlag==2:
@@ -816,11 +818,11 @@ class ModifyRequest:
                 for part in parts:
                     if self.fileUploadList[fileIndex]:
                         # Extract parts and edit (just edit some part containing "filename=<filename>")
-                        new_filename = get_filename(self.fileUploadList[fileIndex])
-                        new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
-                        new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+                        new_filename = self.get_filename(self.fileUploadList[fileIndex])
+                        new_file_mime = self.get_mime_type(self.fileUploadList[fileIndex])
+                        new_file_content = self.read_file_upload(self.fileUploadList[fileIndex])
                         if b'filename=' in part:
-                            edited_part = edit_part(part, new_filename, new_file_mime, new_file_content)
+                            edited_part = self.edit_part(part, new_filename, new_file_mime, new_file_content)
                             temp_file.write(start_boundary + edited_part)
                             edited = True
                             fileIndex += 1
@@ -829,11 +831,11 @@ class ModifyRequest:
 
                 # Check if no part was edited, then append the new part before the footer
                 while fileIndex < len(self.fileUploadList):# Extract parts and edit (just edit some part containing "filename=<filename>")
-                    new_filename = get_filename(self.fileUploadList[fileIndex])
-                    new_file_mime = get_mime_type(self.fileUploadList[fileIndex])
-                    new_file_content = read_file_upload(self.fileUploadList[fileIndex])
+                    new_filename = self.get_filename(self.fileUploadList[fileIndex])
+                    new_file_mime = self.get_mime_type(self.fileUploadList[fileIndex])
+                    new_file_content = self.read_file_upload(self.fileUploadList[fileIndex])
 
-                    new_part = add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
+                    new_part = self.add_new_part(start_boundary, new_filename, new_file_mime, new_file_content)
                     temp_file.write(new_part)
                     fileIndex += 1
 
@@ -847,12 +849,12 @@ class ModifyRequest:
                 body = edited_data + footer
 
                 # Modify header
-                header = change_content_length(body, length=len(body))
+                header = self.change_content_length(body, length=len(body))
 
                 final_message = header + b'\n' + body
 
                 # Save the modified data to a new binary file
-                save_request_mode2(modifiedFilename, final_message)
+                self.save_request_mode2(self.modifiedFilename, final_message)
         
         else:
             print("Not support this mode")
@@ -865,42 +867,42 @@ class ModifyRequest:
             header+= b'\n'
 
             # Replace or add filename
-            header = change_header_filename(header, b"PATCH", get_filename(file))
+            header = self.change_header_filename(header, self.get_filename(file))
 
             # Replace or add Content-Type
-            header = change_content_type(header, file)
+            header = self.change_content_type(header, file)
 
             # Replace or add Content-Length
-            header = change_content_length(header, file=file)
+            header = self.change_content_length(header, file=file)
     
             # Extract parts and edit (just edit some part containing "filename=<filename>")
-            body = read_file_upload(file)
+            body = self.read_file_upload(file)
             final_message = header + b"\n" + body
 
             # Save the modified data to a new binary file
-            save_request_mode1(modifiedFilename, index, final_message)
+            self.save_request_mode1(self.modifiedFilename, index, final_message)
         
 
 
     def add_file(self):
-        if self.method == 'POST':
+        if self.method == b'POST':
             if self.boundary is not None:
-                post_bound()
+                self.post_bound()
                 print(">>> Modify requst successful <<<")
             else:
-                post_unbound()
+                self.post_unbound()
                 print(">>> Modify requst successful <<<")
 
-        elif self.method == 'PUT':
-            put()
+        elif self.method == b'PUT':
+            self.put()
             print(">>> Modify requst successful <<<")
 
-        elif self.method == 'PATCH':
+        elif self.method == b'PATCH':
             if self.boundary is not None:
-                patch_bound()
+                self.patch_bound()
                 print(">>> Modify requst successful <<<")
             else:
-                patch_unbound()
+                self.patch_unbound()
                 print(">>> Modify requst successful <<<")
             
         else:
