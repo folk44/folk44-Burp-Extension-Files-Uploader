@@ -1,0 +1,10 @@
+burp-1.27.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+burp-1.27.dist-info/METADATA,sha256=5g38zL3X76y2jmE3ILg_Tg4nm09KHYXM46sbhOn0SwY,2098
+burp-1.27.dist-info/RECORD,,
+burp-1.27.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+burp-1.27.dist-info/WHEEL,sha256=OqRkF0eY5GHssMorFjlbTIq072vpHpF60fIQA6lS9xA,92
+burp-1.27.dist-info/top_level.txt,sha256=lNgWx7jlZwU_HL2Y3VNoskony6SsFmHWWrAuqoO2RqA,5
+burp/__init__.py,sha256=wT2TMPtrbVjpUG0o6YRBWMSzjmz06v7xxEVu45clWOs,251
+burp/__pycache__/__init__.cpython-312.pyc,,
+burp/__pycache__/burp.cpython-312.pyc,,
+burp/burp.py,sha256=90bbojjqlHbHG1-xd3buS_2_LcnQ4mkUv1F-oBkFut0,141134

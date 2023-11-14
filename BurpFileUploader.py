@@ -1,8 +1,5 @@
 import os
 import re
-import subprocess
-import json
-import requests
 import tempfile
 import magic # pip install python-magic-bin
 
@@ -572,33 +569,43 @@ class ModifyRequest:
         with open(filename, 'wb') as f:
             f.write(message)
 
-    def change_header_filename(self, part, new_filename):
+    def change_put_header_filename(self, part, new_filename):
         # Regex to match the pattern
-        pattern = self.method + rb' (.*/).* (.+\n)'
-        part = re.sub(pattern, self.method + rb' \1' + new_filename + rb' \2', part)
-        return part
+        pattern = r'(PUT\s+\/(?:[^ ]*\/)?)([^ ]*)( HTTP.*\n)'
+        part = re.sub(pattern, r'\1' + new_filename + r'\3', part.decode())
+        return part.encode()
+    
+    def change_patch_header_filename(self, part, new_filename):
+        # Regex to match the pattern
+        pattern = r'(PATCH\s+\/(?:[^ ]*\/)?)([^ ]*)( HTTP.*\n)'
+        part = re.sub(pattern, r'\1' + new_filename + r'\3', part.decode())
+        return part.encode()
 
     def change_content_type(self, part, file):
         # Replace or add Content-Type
         if b"Content-Type:" in part:
-            part = re.sub(rb"Content-Type: .+?(?=;|\n)", b"Content-Type: " + self.get_mime_type(file), part)
+            part = re.sub(r"Content-Type: .+?(?=;|\n)", "Content-Type: " + self.get_mime_type(file).decode(), part.decode())
+            return part.encode()
         else:
             part += b"Content-Type: {}\n".format(self.get_mime_type(file))
-        return part
+            return part
 
     def change_content_length(self, part, length=0, file=None):
         # Replace or add Content-Length
         if file is not None:
             if b"Content-Length:" in part:
-                part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + self.get_content_length(file), part)
+                part = re.sub(r"Content-Length: \d+", "Content-Length: " + self.get_content_length(file).decode(), part.decode())
+                return part.encode()
             else:
                 part += b"Content-Length: " + self.get_content_length(file) + b'\n'
+                return part
         else:
             if b"Content-Length:" in part:
-                part = re.sub(rb"Content-Length: \d+", b"Content-Length: " + (str(length).encode()), part)
+                part = re.sub(r"Content-Length: \d+", "Content-Length: " + str(length), part.decode())
+                return part.encode()
             else:
                 part = part + b"Content-Length: " + (str(length).encode()) + b'\n'
-        return part
+                return part
 
 
 
@@ -732,7 +739,7 @@ class ModifyRequest:
             header+= b'\n'
 
             # Replace or add filename
-            header = self.change_header_filename(header, self.get_filename(file))
+            header = self.change_put_header_filename(header, self.get_filename(file))
 
             # Replace or add Content-Type
             header = self.change_content_type(header, file)
@@ -867,7 +874,7 @@ class ModifyRequest:
             header+= b'\n'
 
             # Replace or add filename
-            header = self.change_header_filename(header, self.get_filename(file))
+            header = self.change_patch_header_filename(header, self.get_filename(file))
 
             # Replace or add Content-Type
             header = self.change_content_type(header, file)
@@ -918,12 +925,12 @@ class ModifyRequest:
 
             parts = content.split(self.separator)
             for i, part in enumerate(parts):
-                part_file_path = os.path.join(self.temp_dir.name, f'part_{i}')
+                part_file_path = os.path.join(self.temp_dir.name, 'part_{}'.format(i))
                 with open(part_file_path, 'wb') as part_file:
                     part_file.write(part)
                 self.part_files.append(part_file_path)
         except Exception as e:
-            raise IOError(f"An error occurred while reading the file: {e}")
+            raise IOError("An error occurred while reading the file: {}".format(e))
 
     def get_part(self, part_number):
         # Returns the content of the requested part from the temporary file.
@@ -931,7 +938,7 @@ class ModifyRequest:
             self.read_and_split_modified_request()
 
         if part_number < 1 or part_number > len(self.part_files):
-            return f"Invalid part number. There are only {len(self.part_files)} parts."
+            return "Invalid part number. There are only {} parts.".format(len(self.part_files))
 
         with open(self.part_files[part_number - 1], 'rb') as part_file:
             return part_file.read()
