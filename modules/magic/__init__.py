@@ -19,7 +19,7 @@ Usage:
 import sys
 import glob
 import ctypes
-import ctypes.util
+from ctypes import *
 import threading
 import logging
 

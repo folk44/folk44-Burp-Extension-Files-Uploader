@@ -1,8 +1,5 @@
 import os
 import re
-import subprocess
-import json
-import requests
 import tempfile
 import magic # pip install python-magic-bin
 
@@ -10,7 +7,7 @@ requestFilePath = "request.txt"
 fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
 outputPath = "output_file.bin"
 fileUploadList = ["Files_Test/file.json", "Files_Test/file.png","Files_Test/s_file.pdf", "Files_Test/s_file.docx"]
-ModeFlag = 1 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
+ModeFlag = 2 # ModeFlag = 0 (not set), 1 (a file per request), 2 (all files in a request)
 # BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
 # Special character for separation, for example, a newline
 separator = b'\n--*--\n-*-*-\n-*-BurpExtensionByFolk44-*-\n-*-*-\n--*--\n'

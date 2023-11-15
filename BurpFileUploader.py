@@ -412,21 +412,22 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 
 ### HISTORY METHODS ###############
-    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
+    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo, order, filePath):
+        # Check if it's a request or response
         if messageIsRequest:
             return
+        
+        requestInfo = self._helpers.analyzeRequest(messageInfo)
+        url = str(requestInfo.getUrl())
+        method = requestInfo.getMethod()
+        # Additional logic to get other details like file path, etc.
 
-        request = self._helpers.analyzeRequest(messageInfo)
-        response = self._helpers.analyzeResponse(messageInfo.getResponse())
-
-        url = str(request.getUrl())
-        status = response.getStatusCode()
+        responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
+        statusCode = responseInfo.getStatusCode()
         length = len(messageInfo.getResponse())
 
-        self.table_model.addEntry(("HTTP", url, str(status), str(length)))
+    
 
-        # Update preview pane (simplified for demonstration)
-        self.previewPane.setText(str(messageInfo.getRequest()) + "\n\n" + str(messageInfo.getResponse()))
 
 
 

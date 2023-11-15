@@ -1,0 +1,23 @@
+Metadata-Version: 2.1
+Name: utils2
+Version: 0.1.2
+Summary: Utils for various scenarios
+Home-page: https://github.com/eyalev/py_utils
+Author: Eyal Levin
+Author-email: eyalev@gmail.com
+License: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Utilities
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3.4
+Requires-Dist: six
+Requires-Dist: python-dateutil
+Requires-Dist: requests
+
+PyUtils
+=======================
+
+Utils and helpers for various scenarios. Focusing on simple APIs.
