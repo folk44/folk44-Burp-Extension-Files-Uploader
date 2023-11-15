@@ -32,7 +32,8 @@ from javax.swing import (JPanel,
     JSpinner,
     JSpinner,
     JComboBox,
-    JOptionPane)
+    JOptionPane,
+    DefaultTableModel)
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 from burp import IHttpListener
 from burp import IContextMenuFactory, IContextMenuInvocation
@@ -41,6 +42,7 @@ from java.awt.datatransfer import StringSelection
 from java.awt.event import ActionListener
 from javax.swing import JMenuItem
 from java.util import ArrayList
+from javax.swing.table import AbstractTableModel, TableRowSorter
 
 
 class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
@@ -52,7 +54,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.request = None
         self.mode = 1
         self.upload_modes = ["Upload one file per request", "Upload all files in one request"]
-
+        self._log = []
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
         self.callbacks = callbacks # set callbacks
@@ -62,8 +64,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # creating a message editor from burp to show request 
         self.requestViewerForPosition = callbacks.createMessageEditor(None, True)
         self.requestViewerForPayload = callbacks.createMessageEditor(None, True)
-        self.requestViewerForHistory = callbacks.createMessageEditor(None, True)
-        self.responseViewer = callbacks.createMessageEditor(None, True)
+        self.requestViewerForHistory = callbacks.createMessageEditor(None, False)
+        self.responseViewerForHistory = callbacks.createMessageEditor(None, False)
         
         # Main UI setup
         self.main_panel = JPanel(BorderLayout())
@@ -134,30 +136,10 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     # Request panel
         preview_panel = JPanel(BorderLayout())
 
-        # Preview scrolling button
-        group_scrolling_preview = JPanel(FlowLayout(FlowLayout.LEFT))
-        self.previous_payload_button = JButton("<", actionPerformed=self.previous_payload)
-        self.next_payload_button = JButton(">", actionPerformed=self.next_payload)
-        group_scrolling_preview.add(self.previous_payload_button)
-        group_scrolling_preview.add(self.next_payload_button)
-        
-        # Create a JLabel to display the count of items in the list
-        self.count_label = JLabel((str(int(self.current_index)) + "  of  " + str(self.payload_files.size()-1)))
-        group_scrolling_preview.add(self.count_label)
-
-        # Create the JList to display current file
-        self.file_label = JLabel("  " + str(self.payload_files.getElementAt(self.current_index)))
-        print(self.payload_files.getElementAt(self.current_index))
-
         # Request preview mornitoring
         self.editor_viewposition = JTabbedPane()
         self.editor_viewposition.addTab("Request", self.requestViewerForPosition.getComponent())
 
-        # Group topic & scrolling button
-        group_header_preview = JPanel(GridLayout(3,1))
-        group_header_preview.add(group_scrolling_preview)
-        group_header_preview.add(self.file_label)
-        preview_panel.add(group_header_preview, BorderLayout.NORTH)
         preview_panel.add(self.editor_viewposition)
         preview_panel.setMinimumSize(Dimension(200, 50))
         preview_panel.setMaximumSize(Dimension(600, 300))
@@ -173,9 +155,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 ### PAYLOADS ###############
         # Panel for splitting payload_setting & request preview
-        split_panel = JSplitPane(JSplitPane.VERTICAL_SPLIT)
-        split_panel.setDividerLocation(250)
-        split_panel.setBorder(None)
+        split_panel_payload = JSplitPane(JSplitPane.VERTICAL_SPLIT)
+        split_panel_payload.setDividerLocation(250)
+        split_panel_payload.setBorder(None)
         
     # Start upload button
         start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
@@ -252,16 +234,70 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         preview_panel.setMaximumSize(Dimension(600, 300))
         
         # Add 2 components to split_panel and add it to payloads_panel
-        split_panel.setTopComponent(upload_panel)
-        split_panel.setBottomComponent(preview_panel)
-        self.payloads_panel.add(split_panel, BorderLayout.CENTER)
+        split_panel_payload.setTopComponent(upload_panel)
+        split_panel_payload.setBottomComponent(preview_panel)
+        self.payloads_panel.add(split_panel_payload, BorderLayout.CENTER)
 
         self.callbacks.customizeUiComponent(self.editor_view)
 
 
 
 ### HISTORY ###############
+    # Panel for splitting payload_setting & request preview
+        split_panel_history = JSplitPane(JSplitPane.VERTICAL_SPLIT)
+        split_panel_history.setDividerLocation(250)
+        split_panel_history.setBorder(None)
+        
+    # Start upload button
+        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        self.start_upload_button = JButton("Start upload", actionPerformed=self.start_upload)
+        self.start_upload_button.setBackground(Color(255, 102, 51))
+        self.start_upload_button.setForeground(Color.WHITE)
+        self.start_upload_button.setFont(Font(self.start_upload_button.getFont().getName(), Font.BOLD, self.start_upload_button.getFont().getSize()))
+        start_upload_panel.add(self.start_upload_button)
+        # Add the top panel to the main panel at the NORTH position
+        self.history_panel.add(start_upload_panel, BorderLayout.NORTH)
 
+    # 1) History Table
+        self.table_model = HttpHistoryTableModel()
+        self.table = JTable(self.table_model)
+        
+        # Setting initial column widths
+        columnModel = self.table.getColumnModel()
+        columnWidths = [10, 500, 20, 300, 20, 20, 100] 
+        for i in range(len(columnWidths)):
+            column = columnModel.getColumn(i)
+            column.setPreferredWidth(columnWidths[i])
+        
+        # Enable sorting
+        sorter = TableRowSorter(self.table.getModel())
+        self.table.setRowSorter(sorter)
+
+        self.table_scrollPane = JScrollPane(self.table)
+
+       
+    # 2) Request & Response
+        # Request preview mornitoring
+        self.editor_view_request = JTabbedPane()
+        self.editor_view_request.addTab("Request", self.requestViewerForHistory.getComponent())
+        self.editor_view_response = JTabbedPane()
+        self.editor_view_response.addTab("Response", self.responseViewerForHistory.getComponent())
+
+        self.split_panel_detail = JSplitPane(JSplitPane.HORIZONTAL_SPLIT)
+        self.split_panel_detail.setDividerLocation(700)
+        self.split_panel_detail.setBorder(None)
+        self.split_panel_detail.setLeftComponent(self.editor_view_request)
+        self.split_panel_detail.setRightComponent(self.editor_view_response)
+
+
+    # Add 2 components to split_panel_position and add it to positions_panel
+        split_panel_history.setTopComponent(self.table_scrollPane)
+        split_panel_history.setBottomComponent(self.split_panel_detail)
+        self.history_panel.add(split_panel_history, BorderLayout.CENTER)
+
+        self.callbacks.customizeUiComponent(self.editor_view_request)
+        self.callbacks.customizeUiComponent(self.editor_view_response)
+        
         
         
 ### MAIN ###############
@@ -375,6 +411,25 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 
 
+### HISTORY METHODS ###############
+    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
+        if messageIsRequest:
+            return
+
+        request = self._helpers.analyzeRequest(messageInfo)
+        response = self._helpers.analyzeResponse(messageInfo.getResponse())
+
+        url = str(request.getUrl())
+        status = response.getStatusCode()
+        length = len(messageInfo.getResponse())
+
+        self.table_model.addEntry(("HTTP", url, str(status), str(length)))
+
+        # Update preview pane (simplified for demonstration)
+        self.previewPane.setText(str(messageInfo.getRequest()) + "\n\n" + str(messageInfo.getResponse()))
+
+
+
 ### MAIN METHODS ###############
     def start_upload(self, event):
         pass
@@ -439,6 +494,29 @@ class UploadModeActionListener(ActionListener):
 
         # Pass the selected mode name to the setUploadMode method
         self._extender.setUploadMode(selected_mode)
+
+class HttpHistoryTableModel(AbstractTableModel):
+    column_names = ("#", "URL", "Method", "File path", "Status code", "Length", "Time")
+
+    def __init__(self):
+        self.data = []
+
+    def getColumnCount(self):
+        return len(self.column_names)
+
+    def getRowCount(self):
+        return len(self.data)
+
+    def getColumnName(self, columnIndex):
+        return self.column_names[columnIndex]
+
+    def getValueAt(self, rowIndex, columnIndex):
+        return self.data[rowIndex][columnIndex]
+
+    def addEntry(self, entry):
+        self.data.append(entry)
+        self.fireTableRowsInserted(len(self.data) - 1, len(self.data) - 1)
+
 
 
 class ModifyRequest:
