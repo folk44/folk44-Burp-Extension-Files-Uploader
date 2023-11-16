@@ -1,7 +1,7 @@
 import os
 import re
 import tempfile
-import magic # pip install python-magic-bin
+import mimetypes
 
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
@@ -609,8 +609,7 @@ class ModifyRequest:
 
     # FILE UPLOAD #################       
     def get_mime_type(self, filename):
-        mime = magic.Magic(mime=True)
-        return (mime.from_file(filename)).encode()
+        return str(list(mimetypes.guess_type(filename))[0]).encode()
 
     def get_content_length(self, filename):
         return str(os.path.getsize(filename)).encode()

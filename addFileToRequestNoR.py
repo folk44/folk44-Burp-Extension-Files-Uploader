@@ -1,7 +1,7 @@
 import os
 import re
 import tempfile
-import magic # pip install python-magic-bin
+import mimetypes
 
 requestFilePath = "request.txt"
 fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
@@ -82,8 +82,7 @@ def edit_part(part, new_filename, new_content_type, new_binary_content):
 
 # FILE UPLOAD #################       
 def get_mime_type(filename):
-    mime = magic.Magic(mime=True)
-    return (mime.from_file(filename)).encode()
+    return str(list(mimetypes.guess_type(filename))[0]).encode()
 
 def get_content_length(filename):
     return str(os.path.getsize(filename)).encode()
