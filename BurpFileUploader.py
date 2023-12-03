@@ -32,8 +32,7 @@ from javax.swing import (JPanel,
     JSpinner,
     JSpinner,
     JComboBox,
-    JOptionPane,
-    DefaultTableModel)
+    JOptionPane)
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 from burp import IHttpListener
 from burp import IContextMenuFactory, IContextMenuInvocation
@@ -42,7 +41,7 @@ from java.awt.datatransfer import StringSelection
 from java.awt.event import ActionListener
 from javax.swing import JMenuItem
 from java.util import ArrayList
-from javax.swing.table import AbstractTableModel, TableRowSorter
+from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableModel
 
 
 class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
@@ -53,7 +52,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.current_index = 0
         self.request = None
         self.mode = 1
-        self.upload_modes = ["Upload one file per request", "Upload all files in one request"]
+        self.upload_modes = ["Upload single file per request", "Upload multiple files in a request"]
         self._log = []
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
@@ -379,9 +378,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.request = self.requestViewerForPosition.getMessage()
         if self.request is not None or len(self.request) != 0:
             if self.payload_files is not None:
-                self.manageRequest = ModifyRequest(self.request, self.convert_to_list(self.payload_files), self.mode)
-                self.manageRequest.add_file()
-                self.requestViewerForPosition.setMessage(self.manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
+                manageRequest = ModifyRequest(self.request, self.convert_to_list(self.payload_files), self.mode)
+                manageRequest.add_file()
+                self.requestViewerForPosition.setMessage(manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
             else:
                 print("Payload files are not set")
         else:
