@@ -2,6 +2,7 @@ import os
 import re
 import tempfile
 import mimetypes
+from array import array
 
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
@@ -335,7 +336,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             print("Mode set to {}.".format(mode_name))
         else:
             print("Unknown Mode")
-    
+
 
 ### PAYLOADS METHODS ############### 
     def add_payload(self, event):
@@ -376,8 +377,17 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     def generate_payloads(self, event):
         # Assuming requestViewerForPosition is your MessageEditor instance
         self.request = self.requestViewerForPosition.getMessage()
-        if self.request is not None or len(self.request) != 0:
-            if self.payload_files is not None:
+        print(self.request)
+
+        # Convert array to bytes
+        # binary_string = ''.join(chr(byte) for byte in self.request)
+        binary_string_buffer = buffer(self.request)
+        # print(binary_string)
+        print(binary_string_buffer)
+
+        print(self.payload_files.size())
+        if len(self.request) > 0:
+            if self.payload_files.size() > 1:
                 manageRequest = ModifyRequest(self.request, self.convert_to_list(self.payload_files), self.mode)
                 manageRequest.add_file()
                 self.requestViewerForPosition.setMessage(manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
