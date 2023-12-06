@@ -55,6 +55,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.mode = 1
         self.upload_modes = ["Upload single file per request", "Upload multiple files in a request"]
         self._log = []
+        self.RequestObject = None # ModifyRequest class
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
         self.callbacks = callbacks # set callbacks
@@ -351,10 +352,12 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                 if file.getPath() not in self.convert_to_list(self.payload_files):
                     # add path to the payload_files
                     self.payload_files.addElement(file.getPath())
-                    if self.current_index == 0:
-                        self.current_index = 1
+                    self.current_index = 0
+                    self.RequestObject = None
                     self.update_count()
                     self.update_file_label()
+                    self.update_viewer_payload()
+                    
                     
     def convert_to_list(self, model):
         return [model.elementAt(i) for i in range(model.size())]
@@ -364,56 +367,85 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         for index in reversed(selected_indices):  # Reverse to avoid shifting issues
             self.payload_files.remove(index)
             self.current_index = 0
+            self.RequestObject = None
             self.update_count()
             self.update_file_label()
+            self.update_viewer_payload()
 
     def clear_payloads(self, event):
         self.payload_files.clear()
         self.payload_files.addElement(None)
         self.current_index = 0
+        self.RequestObject = None
         self.update_count()
         self.update_file_label()
+        self.update_viewer_payload()
     
     def generate_payloads(self, event):
         # Assuming requestViewerForPosition is your MessageEditor instance
         self.request = self.requestViewerForPosition.getMessage()
-        # print(type(b'sa'))
-        # print(self.request)
-        # print(self.payload_files.size())
         if len(self.request) > 0:
             if self.payload_files.size() > 1:
-                # Convert array to bytes
+                # Convert byte array to bytes (read from memory)
                 binary_string_request = buffer(self.request)
-                print(self.mode)
-                manageRequest = ModifyRequest(binary_string_request, self.convert_to_list(self.payload_files), self.mode)
-                manageRequest.add_file()
-                self.requestViewerForPayload.setMessage(manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
+                self.RequestObject = ModifyRequest(binary_string_request, self.convert_to_list(self.payload_files), self.mode)
+                self.RequestObject.add_file()
+                self.current_index = 1
+                self.update_count()
+                self.update_file_label()
+                self.update_viewer_payload()
             else:
                 print("Payload files are not set")
         else:
             print("Please fill request in the text editor in position tab")
 
+    def update_viewer_payload(self):
+        if self.current_index == 0:
+            self.requestViewerForPayload.setMessage("", True)
+        elif self.current_index > 0:
+            self.requestViewerForPayload.setMessage(self.RequestObject.get_part(self.current_index), True)  # setMessage(byte[] message, boolean isRequest)
+        else:
+            print("Index Error")
+
 
     def update_count(self):
-        self.count_label.setText((str(int(self.current_index)) + "  of  " + str(self.payload_files.size()-1)))
-        print(self.payload_files.getElementAt(self.current_index))
+        if self.mode == 1:
+            self.count_label.setText((str(int(self.current_index)) + "  of  " + str(self.payload_files.size()-1)))
+            print(self.payload_files.getElementAt(self.current_index))
+        else:
+            self.count_label.setText("1  of  1")
 
     def update_file_label(self):
-        self.file_label.setText("  " + str(self.payload_files.getElementAt(self.current_index)))
+        if self.mode == 1:
+            if self.current_index > 0:
+                self.file_label.setText("  " + str(self.payload_files.getElementAt(self.current_index)))
+            elif self.current_index == 0:
+                self.file_label.setText("")
+        else:
+            self.file_label.setText("  Multiple files in the request below")
 
     def previous_payload(self, event):
-        if self.current_index > 1:
-            self.current_index -= 1
-            self.update_count()
-            self.update_file_label()
-            self.requestViewerForPosition.setMessage(self.manageRequest.get_part(self.current_index), True)
+        if self.RequestObject is not None:
+            if self.mode == 1:
+                if self.current_index > 1:
+                    self.current_index -= 1
+                    self.update_count()
+                    self.update_file_label()
+                    self.update_viewer_payload()
+            else: # mode 2 -> do nothing
+                pass
+
 
     def next_payload(self, event):
-        if self.current_index < self.payload_files.size() - 1:
-            self.current_index += 1
-            self.update_count()
-            self.update_file_label()
-            self.requestViewerForPosition.setMessage(self.manageRequest.get_part(self.current_index), True)
+        if self.RequestObject is not None:
+            if self.mode == 1:
+                if self.current_index < self.payload_files.size() - 1:
+                    self.current_index += 1
+                    self.update_count()
+                    self.update_file_label()
+                    self.update_viewer_payload()
+            else: # mode 2 -> do nothing
+                pass    
 
 
 
@@ -541,6 +573,7 @@ class ModifyRequest:
         self.temp_dir = tempfile.mkdtemp()
         self.part_files = []
         self.modifyFlag = 0
+        
 
         self.fileUploadList = fileUploadList # file path list
         print(self.fileUploadList)
@@ -590,7 +623,7 @@ class ModifyRequest:
             return None
 
     def add_new_part(self, boundary, new_filename, new_content_type, new_binary_content):
-        return self.boundary + b'\r\n' + \
+        return boundary + b'\r\n' + \
             b'Content-Disposition: form-data; name="file"; filename=' + new_filename + b'\r\n' + \
             b'Content-Type: ' + new_content_type + b'\r\n\r\n' + \
             new_binary_content + b'\r\n'
@@ -660,7 +693,7 @@ class ModifyRequest:
     def save_request_mode2(self, filename, message):
         # Save the modified data to a new binary file
         with open(filename, 'wb') as f:
-            f.write(message)
+            f.write(message + self.separator)
 
     def change_put_header_filename(self, part, new_filename):
         # Regex to match the pattern
@@ -1041,12 +1074,13 @@ class ModifyRequest:
 
             parts = content.split(self.separator)
             for i, part in enumerate(parts):
-                part_file_path = os.path.join(self.temp_dir.name, 'part_{}'.format(i))
+                # print(part)
+                part_file_path = os.path.join(self.temp_dir, 'part_%d' % i)
                 with open(part_file_path, 'wb') as part_file:
                     part_file.write(part)
                 self.part_files.append(part_file_path)
         except Exception as e:
-            raise IOError("An error occurred while reading the file: {}".format(e))
+            raise IOError("An error occurred while reading the file: %s" % e)
 
     def get_part(self, part_number):
         # Returns the content of the requested part from the temporary file.
@@ -1054,10 +1088,17 @@ class ModifyRequest:
             self.read_and_split_modified_request()
 
         if part_number < 1 or part_number > len(self.part_files):
-            return "Invalid part number. There are only {} parts.".format(len(self.part_files))
+            raise ValueError("Invalid part number. There are only %d parts." % len(self.part_files))
 
-        with open(self.part_files[part_number - 1], 'rb') as part_file:
-            return part_file.read()
+        part_file_path = self.part_files[part_number - 1]
+        with open(part_file_path, 'rb') as part_file:
+            part = part_file.read()
+            part_byteArray = array('b', part)
+            
+            # with open("Test.bin", 'wb') as part_file:
+            #     part_file.write(part)
+            # print(type(part))
+            return part_byteArray
 
     def cleanup(self):
         # Cleans up the temporary files and directory.
