@@ -386,8 +386,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                 binary_string_request = buffer(self.request)
                 print(self.mode)
                 manageRequest = ModifyRequest(binary_string_request, self.convert_to_list(self.payload_files), self.mode)
-                # manageRequest.add_file()
-                # self.requestViewerForPosition.setMessage(manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
+                manageRequest.add_file()
+                self.requestViewerForPayload.setMessage(manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
             else:
                 print("Payload files are not set")
         else:
@@ -540,10 +540,10 @@ class ModifyRequest:
         self.modifiedFilename = "output_file.bin"
         self.temp_dir = tempfile.mkdtemp()
         self.part_files = []
-        # print(self.mode)
+        self.modifyFlag = 0
 
         self.fileUploadList = fileUploadList # file path list
-        print(type(mode))
+        print(self.fileUploadList)
         self.ModeFlag = mode # 1 (a file per request), 2 (all files in a request)
 
         with open(self.requestFilePath, 'wb') as request_file:
@@ -627,7 +627,10 @@ class ModifyRequest:
         return str(os.path.getsize(filename)).encode()
 
     def get_filename(self, filename):
-        return (os.path.basename(filename)).encode()
+        if filename is None:
+            # Handle the None case, perhaps log an error or raise an exception
+            raise ValueError("Filename cannot be None")
+        return os.path.basename(filename).encode()
 
     def read_file_upload(self, filename):
         with open(filename, 'rb') as file:
@@ -648,11 +651,11 @@ class ModifyRequest:
         if index == 0:
             with open(filename, 'wb') as f:
                 f.write(message + self.separator)
-                print("File number {} was added".format(index))
+                print("File number {} was added".format(index+1))
         else:
             with open(filename, 'ab') as f:
                 f.write(message + self.separator)
-                print("File number {} was added".format(index))
+                print("File number {} was added".format(index+1))
 
     def save_request_mode2(self, filename, message):
         # Save the modified data to a new binary file
@@ -706,7 +709,8 @@ class ModifyRequest:
 
         # >>> One file per request <<<
         if self.ModeFlag == 1:
-            for index, file in enumerate(self.fileUploadList):
+            for index, file in enumerate(self.fileUploadList[1:]):
+                print(file)
                 # Extract the data between \n\n and the ending sequence
                 start_index = self.request.find(b'\r\n\r\n')
                 end_index = self.request.find(end_boundary)
@@ -750,13 +754,14 @@ class ModifyRequest:
 
                     # Save the modified data to a new binary file
                     self.save_request_mode1(self.modifiedFilename, index, final_message)
+                    self.modifyFlag = 1
         
         # >>> All files in a request <<<
         elif self.ModeFlag==2:
-            fileIndex = 0
+            fileIndex = 1
             # Extract the data between \r\n\r\n and the ending sequence
             start_index = self.request.find(b'\r\n\r\n')
-            end_index = self.equest.find(end_boundary)
+            end_index = self.request.find(end_boundary)
             extracted_data = self.request[start_index+4:end_index]
 
             # Split the extracted data using the specified delimiter
@@ -799,13 +804,14 @@ class ModifyRequest:
 
                 # Save the modified data to a new binary file
                 self.save_request_mode2(self.modifiedFilename, final_message)
+                self.modifyFlag = 1
         
         else:
             print("Not support this mode")
 
     def post_unbound(self):
         if self.ModeFlag==1:
-            for index, file in enumerate(self.fileUploadList):
+            for index, file in enumerate(self.fileUploadList[1:]):
                 # Extract parts between \n\n and the ending sequence
                 header, body = self.request.split(b'\r\n\r\n', 1)
                 header+= b'\r\n'
@@ -822,12 +828,13 @@ class ModifyRequest:
 
                 # Save the modified data to a new binary file
                 self.save_request_mode1(self.modifiedFilename, index, final_message)
+                self.modifyFlag = 1
         else:
             print("Not support this mode")
 
     def put(self):
         if self.ModeFlag==1:
-            for index, file in enumerate(self.fileUploadList):
+            for index, file in enumerate(self.fileUploadList[1:]):
                 # Extract parts between \r\n\r\n and the ending sequence
                 header, body = self.request.split(b'\r\n\r\n', 1)
                 header+= b'\r\n'
@@ -847,6 +854,7 @@ class ModifyRequest:
 
                 # Save the modified data to a new binary file
                 self.save_request_mode1(self.modifiedFilename, index, final_message)
+                self.modifyFlag = 1
         else:
             print("Not support this mode")
 
@@ -856,7 +864,7 @@ class ModifyRequest:
 
         # >>> One file per request <<<
         if self.ModeFlag == 1:
-            for index, file in enumerate(self.fileUploadList):
+            for index, file in enumerate(self.fileUploadList[1:]):
                 # Extract the data between \n\n and the ending sequence
                 start_index = self.request.find(b'\r\n\r\n')
                 end_index = self.request.find(end_boundary)
@@ -904,10 +912,11 @@ class ModifyRequest:
 
                     # Save the modified data to a new binary file
                     self.save_request_mode1(self.modifiedFilename, index, final_message)
+                    self.modifyFlag = 1
         
         # >>> All files in a request <<<
         elif self.ModeFlag==2:
-            fileIndex = 0
+            fileIndex = 1
             # Extract the data between \n\n and the ending sequence
             start_index = self.request.find(b'\r\n\r\n')
             end_index = self.request.find(end_boundary)
@@ -952,12 +961,13 @@ class ModifyRequest:
                 body = edited_data + footer
 
                 # Modify header
-                header = self.change_content_length(body, length=len(body))
+                header = self.change_content_length(header, length=len(body))
 
                 final_message = header + b'\r\n' + body
 
                 # Save the modified data to a new binary file
                 self.save_request_mode2(self.modifiedFilename, final_message)
+                self.modifyFlag = 1
         
         else:
             print("Not support this mode")
@@ -965,7 +975,7 @@ class ModifyRequest:
 
     def patch_unbound(self):
         if self.ModeFlag == 1:
-            for index, file in enumerate(self.fileUploadList):
+            for index, file in enumerate(self.fileUploadList[1:]):
                 # Extract parts between \n\n and the ending sequence
                 header, body = self.request.split(b'\r\n\r\n', 1)
                 header+= b'\r\n'
@@ -985,34 +995,41 @@ class ModifyRequest:
 
                 # Save the modified data to a new binary file
                 self.save_request_mode1(self.modifiedFilename, index, final_message)
+                self.modifyFlag = 1
         else:
             print("Not support this mode")
 
 
     def add_file(self):
         print("add_file")
+        print(self.method)
         if self.method == b'POST':
             if self.boundary is not None:
+                print("post_bound")
                 self.post_bound()
-                print(">>> Modify requst successful <<<")
             else:
+                print("post_unbound")
                 self.post_unbound()
-                print(">>> Modify requst successful <<<")
 
         elif self.method == b'PUT':
+            print("put")
             self.put()
-            print(">>> Modify requst successful <<<")
 
         elif self.method == b'PATCH':
             if self.boundary is not None:
+                print("patch_bound")
                 self.patch_bound()
-                print(">>> Modify requst successful <<<")
             else:
+                print("patch_unbound")
                 self.patch_unbound()
-                print(">>> Modify requst successful <<<")
             
         else:
             print(">>> Not found HTTP method supporting files uploading <<<")
+        if self.modifyFlag == 1:
+            print(">>> Modify requst successful <<<")
+        else:
+            print(">>> Modify requst unsuccessful <<<")
+
 
     
     # Get each part of request #################
