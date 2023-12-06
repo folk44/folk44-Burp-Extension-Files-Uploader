@@ -383,11 +383,11 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         if len(self.request) > 0:
             if self.payload_files.size() > 1:
                 # Convert array to bytes
-                binary_string_request = str(buffer(self.request))
+                binary_string_request = buffer(self.request)
                 print(self.mode)
                 manageRequest = ModifyRequest(binary_string_request, self.convert_to_list(self.payload_files), self.mode)
-                manageRequest.add_file()
-                self.requestViewerForPosition.setMessage(manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
+                # manageRequest.add_file()
+                # self.requestViewerForPosition.setMessage(manageRequest.get_part(1), True)  # setMessage(byte[] message, boolean isRequest)
             else:
                 print("Payload files are not set")
         else:
@@ -546,12 +546,17 @@ class ModifyRequest:
         print(type(mode))
         self.ModeFlag = mode # 1 (a file per request), 2 (all files in a request)
 
-        with open(request, 'wb') as request_file:
+        with open(self.requestFilePath, 'wb') as request_file:
             request_file.write(request)
+            print("write request successful")
+
+        self.request = self.read_request() # Binary
 
         self.boundary = self.get_boundary()
+        print("Boundary: " + str(self.boundary))
         self.method = self.get_http_method()
-        self.request = self.read_request() # Binary
+        print("Method: " + self.method)
+        
 
     # REQUEST #################
     def read_request(self):
@@ -582,7 +587,6 @@ class ModifyRequest:
             return boundary_value # binary
         else:
             print("Have no boundary")
-            self.ModeFlag = 1
             return None
 
     def add_new_part(self, boundary, new_filename, new_content_type, new_binary_content):
