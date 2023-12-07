@@ -334,9 +334,19 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         if mode_name == self.upload_modes[0]:  # "Upload one file per request"
             self.mode = 1
             print("Mode set to {}.".format(mode_name))
+            self.RequestObject = None
+            self.current_index = 0
+            self.update_count()
+            self.update_file_label()
+            self.update_viewer_payload()
         elif mode_name == self.upload_modes[1]:  # "Upload all files in one request"
             self.mode = 2
             print("Mode set to {}.".format(mode_name))
+            self.RequestObject = None
+            self.current_index = 0
+            self.update_count()
+            self.update_file_label()
+            self.update_viewer_payload()
         else:
             print("Unknown Mode")
 
@@ -1159,11 +1169,11 @@ class ModifyRequest:
         part_file_path = self.part_files[part_number - 1]
         with open(part_file_path, 'wb') as part_file:
             part_file.write(new_content)
-        self.reassemble_and_write_back()
+        self.write_back()
 
-    def reassemble_and_write_back(self):
+    def write_back(self):
         """Reassembles the parts and writes them back to the original file."""
-        with open(self.filename, 'wb') as file:
+        with open(self.modifiedFilename, 'wb') as file:
             for i, part_file_path in enumerate(self.part_files):
                 with open(part_file_path, 'rb') as part_file:
                     file.write(part_file.read())
