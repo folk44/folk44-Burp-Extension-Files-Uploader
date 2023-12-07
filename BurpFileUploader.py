@@ -56,6 +56,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.upload_modes = ["Upload single file per request", "Upload multiple files in a request"]
         self._log = []
         self.RequestObject = None # ModifyRequest class
+        self.request_counter = 0 # for run order number of request when upload
+        self.request_map = {}
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
         self.callbacks = callbacks # set callbacks
@@ -428,6 +430,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         if self.RequestObject is not None:
             if self.mode == 1:
                 if self.current_index > 1:
+                    self.RequestObject.replace_part(self.current_index, buffer(self.requestViewerForPayload.getMessage()))
                     self.current_index -= 1
                     self.update_count()
                     self.update_file_label()
@@ -440,6 +443,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         if self.RequestObject is not None:
             if self.mode == 1:
                 if self.current_index < self.payload_files.size() - 1:
+                    self.RequestObject.replace_part(self.current_index, buffer(self.requestViewerForPayload.getMessage()))
                     self.current_index += 1
                     self.update_count()
                     self.update_file_label()
@@ -450,20 +454,50 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 
 ### HISTORY METHODS ###############
-    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo, order, filePath):
-        # Check if it's a request or response
-        if messageIsRequest:
-            return
-        
-        requestInfo = self._helpers.analyzeRequest(messageInfo)
-        url = str(requestInfo.getUrl())
-        method = requestInfo.getMethod()
-        # Additional logic to get other details like file path, etc.
+    def getNextOrderNumber(self):
+        self.request_counter += 1
+        return self.request_counter
+    
+    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
+        try:
+            if messageIsRequest:
+                requestInfo = self._helpers.analyzeRequest(messageInfo)
+                order_number = self.getNextOrderNumber()
+                self.request_map[messageInfo] = order_number
+                entry = LogEntry(order_number, str(requestInfo.getUrl()), requestInfo.getMethod(), "", "", "", "")
+                self.logTable.addLogEntry(entry)
+            else:
+                responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
+                order_number = self.request_map.get(messageInfo)
+                if order_number is not None:
+                    status_code = str(responseInfo.getStatusCode())
+                    length = str(len(messageInfo.getResponse().tostring()))
+                    time = str(messageInfo.getTime())  # Format the time as needed
+                    self.logTable.updateLogEntry(order_number, status_code, length, time)
+        except Exception as e:
+            print("Error processing HTTP message:", str(e))
 
-        responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
-        statusCode = responseInfo.getStatusCode()
-        length = len(messageInfo.getResponse())
+### SEND REQUEST METHODS ###############    
+    def get_HttpService(self):
+        target = self.target_setting.getText()
+        if '://' in target:
+            split_text = re.split(r':?//', target, 1)
+            return split_text[0], split_text[1] # protocal, domain
+        else:
+            print("Please fill the target follow this format -> http://example.com")
+            return None, None
 
+    
+    def sendRequest(self, request, domain, protocal):
+        try:
+            
+            # Convert the request string to a byte array
+            requestBytes = self._helpers.stringToBytes(request)
+            # Create and send the request
+            httpService = self._helpers.buildHttpService("example.com", 80, False) # (java.lang.String host, int port, boolean useHttps)
+            self._callbacks.makeHttpRequest(httpService, requestBytes)
+        except IOError as e:
+            print("Error sending request: " + str(e))
     
 
 
@@ -471,7 +505,10 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 ### MAIN METHODS ###############
     def start_upload(self, event):
-        pass
+        if self.RequestObject is not None:
+            # save message in payload message editor
+            self.RequestObject.replace_part(self.current_index, buffer(self.requestViewerForPayload.getMessage()))
+            request = self.RequestObject.get_part()
 
 
     def createTopicLabel(self, topic_text, increaseSizeBy=4): # return JLabel
@@ -533,6 +570,17 @@ class UploadModeActionListener(ActionListener):
 
         # Pass the selected mode name to the setUploadMode method
         self._extender.setUploadMode(selected_mode)
+
+
+class LogEntry:
+    def __init__(self, order_number, url, method, file_path, status_code, length, time):
+        self.order_number = order_number
+        self.url = url
+        self.method = method
+        self.file_path = file_path
+        self.status_code = status_code
+        self.length = length
+        self.time = time
 
 class HttpHistoryTableModel(AbstractTableModel):
     column_names = ("#", "URL", "Method", "File path", "Status code", "Length", "Time")
@@ -1099,6 +1147,27 @@ class ModifyRequest:
             #     part_file.write(part)
             # print(type(part))
             return part_byteArray
+        
+    def replace_part(self, part_number, new_content):
+        """Replaces a specific part with new content."""
+        if not self.part_files:
+            self.read_and_split()
+
+        if part_number < 1 or part_number > len(self.part_files):
+            raise ValueError("Invalid part number. There are only %d parts." % len(self.part_files))
+
+        part_file_path = self.part_files[part_number - 1]
+        with open(part_file_path, 'wb') as part_file:
+            part_file.write(new_content)
+        self.reassemble_and_write_back()
+
+    def reassemble_and_write_back(self):
+        """Reassembles the parts and writes them back to the original file."""
+        with open(self.filename, 'wb') as file:
+            for i, part_file_path in enumerate(self.part_files):
+                with open(part_file_path, 'rb') as part_file:
+                    file.write(part_file.read())
+                    file.write(self.separator)
 
     def cleanup(self):
         # Cleans up the temporary files and directory.

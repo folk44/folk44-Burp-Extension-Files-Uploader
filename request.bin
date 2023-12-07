@@ -1,13 +1,9 @@
-PATCH /register_confirm.php HTTP/1.1
-Host: foophones.securitybrigade.com:8080
-User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
-Accept-Language: en-US,en;q=0.5
+GET / HTTP/1.1
+Host: www.google.com
 Accept-Encoding: gzip, deflate, br
-Content-Type: multipart/form-data
-Content-Length: 15039
-Origin: http://foophones.securitybrigade.com:8080
+Accept: */*
+Accept-Language: en-US;q=0.9,en;q=0.8
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.199 Safari/537.36
 Connection: close
-Referer: http://foophones.securitybrigade.com:8080/register.php
-Upgrade-Insecure-Requests: 1
+Cache-Control: max-age=0
 
