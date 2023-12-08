@@ -3,6 +3,7 @@ import re
 import tempfile
 import mimetypes
 from array import array
+from time import sleep
 
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
@@ -43,6 +44,8 @@ from java.awt.event import ActionListener
 from javax.swing import JMenuItem
 from java.util import ArrayList
 from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableModel
+from javax.swing.event import DocumentListener
+
 
 
 class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, IContextMenuInvocation):
@@ -58,6 +61,10 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.RequestObject = None # ModifyRequest class
         self.request_counter = 0 # for run order number of request when upload
         self.request_map = {}
+
+        self.protocal = None
+        self.host = None
+        self.port = None
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
         self.callbacks = callbacks # set callbacks
@@ -111,7 +118,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         upload_mode_combo.addActionListener(upload_mode_listener)
         
 
-        # Payloads panel
+        # Target
         target_setting_label = self.createTopicLabel("Target")
 
         self.target_setting = JTextArea()
@@ -119,15 +126,27 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # self.target_setting.setPreferredSize(Dimension(300, 20)) # set size
 
 
-        scroll_pane = JScrollPane(self.target_setting)
-        scroll_pane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)  # Enable horizontal scrolling
-        scroll_pane.setPreferredSize(Dimension(500, 33))
+        target_scroll_pane = JScrollPane(self.target_setting)
+        target_scroll_pane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)  # Enable horizontal scrolling
+        target_scroll_pane.setPreferredSize(Dimension(500, 33))
 
+        # Port
+        port_setting_label = self.createTopicLabel("Port")
+
+        self.port_setting = JTextArea()
+        self.port_setting.setEditable(True)
+        self.port_setting.getDocument().addDocumentListener(IntegerDocumentFilter(self.port_setting))
+
+        port_scroll_pane = JScrollPane(self.port_setting)
+        port_scroll_pane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)  # Enable horizontal scrolling
+        port_scroll_pane.setPreferredSize(Dimension(500, 33))
 
         group_panel.add(upload_mode_label)
-        group_panel.add(upload_mode_combo)
+        group_panel.add(upload_mode_combo) # Upload Mode
         group_panel.add(target_setting_label)
-        group_panel.add(scroll_pane)
+        group_panel.add(target_scroll_pane) # Target
+        group_panel.add(port_setting_label)
+        group_panel.add(port_scroll_pane) # Port
 
         control_panel.add(group_panel)
 
@@ -350,6 +369,18 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         else:
             print("Unknown Mode")
 
+    # checking the text is Interger or not
+    def isValidInteger(self, text):
+        if not text:
+            return True
+        if '.' in text or 'e' in text.lower():  # Check for decimal point or scientific notation
+            return False
+        try:
+            value = int(text)
+            if value >=0 and value <= 65536:
+                return True
+        except ValueError:
+            return False
 
 ### PAYLOADS METHODS ############### 
     def add_payload(self, event):
@@ -488,28 +519,51 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             print("Error processing HTTP message:", str(e))
 
 ### SEND REQUEST METHODS ###############    
-    def get_HttpService(self):
+    def get_HttpService_fromJText(self):
         target = self.target_setting.getText()
-        if '://' in target:
-            split_text = re.split(r':?//', target, 1)
-            return split_text[0], split_text[1] # protocal, domain
+        port = self.port_setting.getText()
+
+        if port.strip():
+            if self.isValidInteger(port):
+                if '://' in target:
+                    split_text = re.split(r':?//', target, 1)
+                    if split_text[0] and split_text[1]:
+                        self.protocal, self.host = split_text[0], split_text[1] # protocal, host
+                        self.port = int(port)
+                    else:
+                        print("Please fill the target follow this format -> http://example.com")
+                        self.protocal, self.host, self.port = None, None, None
+                else:
+                    print("Please fill the target follow this format -> http://example.com")
+                    self.protocal, self.host, self.port = None, None, None
+            else:
+                print("Please recheck your port number!")
         else:
-            print("Please fill the target follow this format -> http://example.com")
-            return None, None
-
+            print("Please fill the port number!")
+            self.protocal, self.host, self.port = None, None, None
     
-    def sendRequest(self, request, domain, protocal):
-        try:
-            
-            # Convert the request string to a byte array
-            requestBytes = self._helpers.stringToBytes(request)
-            # Create and send the request
-            httpService = self._helpers.buildHttpService("example.com", 80, False) # (java.lang.String host, int port, boolean useHttps)
-            self._callbacks.makeHttpRequest(httpService, requestBytes)
-        except IOError as e:
-            print("Error sending request: " + str(e))
-    
-
+    def sendRequest(self, requestBytes):
+            if self.protocal == "http":
+                try:
+                    # Create and send the request
+                    httpService = self.helpers.buildHttpService(self.host, self.port, False) # (java.lang.String host, int port, boolean useHttps)
+                    self.callbacks.makeHttpRequest(httpService, requestBytes)
+                    print("Upload on http protocal successful!")
+                except IOError as e:
+                    print("Error sending request with http : " + str(e))
+            elif self.protocal == "https":
+                try:
+                    # Create and send the request
+                    httpService = self.helpers.buildHttpService(self.host, self.port, True) # (java.lang.String host, int port, boolean useHttps)
+                    self.callbacks.makeHttpRequest(httpService, requestBytes)
+                    print("Upload on https protocal successful!")
+                except IOError as e:
+                    print("Error sending request with https : " + str(e))
+            else:
+                print("Not found protocal in the target < http, https >")
+                print("Please fill the target follow this format -> http://example.com")
+                self.protocal, self.host = None, None
+                
 
 
 
@@ -518,7 +572,20 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         if self.RequestObject is not None:
             # save message in payload message editor
             self.RequestObject.replace_part(self.current_index, buffer(self.requestViewerForPayload.getMessage()))
-            request = self.RequestObject.get_part()
+            self.get_HttpService_fromJText()
+            if self.protocal is not None and self.host is not None and self.port is not None:
+                if self.mode == 1:
+                        for i in range (1, self.payload_files.size()):
+                            requestBytes = self.RequestObject.get_part(i) # b[]
+                            self.sendRequest(requestBytes)
+                    
+
+                elif self.mode == 2:
+                    requestBytes = self.RequestObject.get_part(1)
+                    self.sendRequest(requestBytes)
+
+        else:
+            print("Please generate request before upload!")
 
 
     def createTopicLabel(self, topic_text, increaseSizeBy=4): # return JLabel
@@ -543,30 +610,32 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     def sendToMyExtension(self, event):
         http_traffic = self._invocation.getSelectedMessages()
         for traffic in http_traffic:
-            protocal_bytes = traffic.getProtocol()
-            header_bytes = traffic.getHost()
-            request_bytes = traffic.getRequest()
+            protocal_bytes = traffic.getProtocol() 
+            header_bytes = traffic.getHost()# byte[]
+            request_bytes = traffic.getRequest() # byte[]
+            port = traffic.getHttpService().getPort() # int
             # Display request in the message editor
-            self.displayInMyExtension(protocal_bytes, header_bytes, request_bytes)
+            self.displayInMyExtension(protocal_bytes, header_bytes, request_bytes, port)
     
     # Display the request in the message editor
-    def displayInMyExtension(self, protocal_bytes, header_bytes, request_bytes):
+    def displayInMyExtension(self, protocal_bytes, header_bytes, request_bytes, port):
         print(protocal_bytes + header_bytes)
         self.requestViewerForPosition.setMessage(request_bytes, True)
         self.target_setting.setText(protocal_bytes + b'://' + header_bytes)  # Set the header text
+        self.port_setting.setText(str(port))
 
     # These methods are required for the IMessageEditorController interface
     def getHttpService(self):
-        return self._invocation.getSelectedMessages()[0].getHttpService()
+        return self._invocation.getSelectedMessages()[0].getHttpService() # string getHost(), int getPort(), string getProtocal()
 
     def getHost(self):
-        return self._invocation.getSelectedMessages()[0].getHeaders()
+        return self._invocation.getSelectedMessages()[0].getHeaders() 
     
     def getRequest(self):
-        return self._invocation.getSelectedMessages()[0].getRequest()
+        return self._invocation.getSelectedMessages()[0].getRequest() # byte[]
 
     def getResponse(self):
-        return self._invocation.getSelectedMessages()[0].getResponse()
+        return self._invocation.getSelectedMessages()[0].getResponse() # byte[]
 
 
 class UploadModeActionListener(ActionListener):
@@ -580,6 +649,41 @@ class UploadModeActionListener(ActionListener):
 
         # Pass the selected mode name to the setUploadMode method
         self._extender.setUploadMode(selected_mode)
+
+
+class IntegerDocumentFilter(DocumentListener):
+    def __init__(self, text_area):
+        self.text_area = text_area
+        self.last_valid_text = ""
+
+    def changedUpdate(self, e):
+        self.validateText()
+
+    def removeUpdate(self, e):
+        self.validateText()
+
+    def insertUpdate(self, e):
+        self.validateText()
+
+    def validateText(self):
+        text = self.text_area.getText()
+        if self.isValidInteger(text):
+            self.last_valid_text = text
+        else:
+            self.text_area.setText("")
+            # self.text_area.setText(self.last_valid_text)
+
+    def isValidInteger(self, text):
+        if not text:
+            return True
+        if '.' in text or 'e' in text.lower():  # Check for decimal point or scientific notation
+            return False
+        try:
+            value = int(text)
+            if value >=0 and value <= 65536:
+                return True
+        except ValueError:
+            return False
 
 
 class LogEntry:
@@ -1117,9 +1221,9 @@ class ModifyRequest:
         else:
             print(">>> Not found HTTP method supporting files uploading <<<")
         if self.modifyFlag == 1:
-            print(">>> Modify requst successful <<<")
+            print(">>> Modify request successful <<<")
         else:
-            print(">>> Failed to modify requst <<<")
+            print(">>> Failed to modify request <<<")
 
 
     

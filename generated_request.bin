@@ -1,0 +1,55 @@
+POST /register_confirm.php HTTP/1.1
+Host: foophones.securitybrigade.com:8080
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate, br
+Content-Type: multipart/form-data; boundary=---------------------------409698212712406467942560654467
+Content-Length: 15039
+Origin: http://foophones.securitybrigade.com:8080
+Connection: close
+Referer: http://foophones.securitybrigade.com:8080/register.php
+Upgrade-Insecure-Requests: 1
+
+-----------------------------409698212712406467942560654467
+Content-Disposition: form-data; name="fname"
+
+sf
+-----------------------------409698212712406467942560654467
+Content-Disposition: form-data; name="lname"
+
+sef
+-----------------------------409698212712406467942560654467
+Content-Disposition: form-data; name="country"
+
+ewfbg
+-----------------------------409698212712406467942560654467
+Content-Disposition: form-data; name="user"
+
+ewrfg
+-----------------------------409698212712406467942560654467
+Content-Disposition: form-data; name="pass"
+
+wqrg
+-----------------------------409698212712406467942560654467
+Content-Disposition: form-data; name="avatar"; filename="file.json"
+Content-Type: application/json
+
+{
+    "fruit": "Apple",
+    "size": "Large",
+    "color": "Red"
+}
+-----------------------------409698212712406467942560654467--
+
+--*--
+-*-*-
+-*-BurpExtensionByFolk44-*-
+-*-*-
+--*--
+
+--*--
+-*-*-
+-*-BurpExtensionByFolk44-*-
+-*-*-
+--*--
