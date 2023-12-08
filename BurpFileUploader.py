@@ -625,9 +625,9 @@ class ModifyRequest:
         # BoundaryFlag = 0 # BoundaryFlag = 0 (no boundary), 1 (have boundary)
         # Special character for separation, for example, a newline
         
-        self.requestFilePath = "request.bin"
+        self.requestFilePath = "original_request.bin"
         self.separator = b'\n--*--\n-*-*-\n-*-BurpExtensionByFolk44-*-\n-*-*-\n--*--\n'
-        self.modifiedFilename = "output_file.bin"
+        self.modifiedFilename = "generated_request.bin"
         self.temp_dir = tempfile.mkdtemp()
         self.part_files = []
         self.modifyFlag = 0
@@ -1119,7 +1119,7 @@ class ModifyRequest:
         if self.modifyFlag == 1:
             print(">>> Modify requst successful <<<")
         else:
-            print(">>> Modify requst unsuccessful <<<")
+            print(">>> Failed to modify requst <<<")
 
 
     
@@ -1151,15 +1151,11 @@ class ModifyRequest:
         part_file_path = self.part_files[part_number - 1]
         with open(part_file_path, 'rb') as part_file:
             part = part_file.read()
-            part_byteArray = array('b', part)
-            
-            # with open("Test.bin", 'wb') as part_file:
-            #     part_file.write(part)
-            # print(type(part))
-            return part_byteArray
+            part_byteArray = array('b', part) # convert to byte array
+            return part_byteArray # b[]
         
     def replace_part(self, part_number, new_content):
-        """Replaces a specific part with new content."""
+        # Replaces a specific part with new content.
         if not self.part_files:
             self.read_and_split()
 
@@ -1172,7 +1168,7 @@ class ModifyRequest:
         self.write_back()
 
     def write_back(self):
-        """Reassembles the parts and writes them back to the original file."""
+        # Reassembles the parts and writes them back to the original file.
         with open(self.modifiedFilename, 'wb') as file:
             for i, part_file_path in enumerate(self.part_files):
                 with open(part_file_path, 'rb') as part_file:
