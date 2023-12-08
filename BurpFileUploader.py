@@ -61,6 +61,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.RequestObject = None # ModifyRequest class
         self.request_counter = 0 # for run order number of request when upload
         self.request_map = {}
+        self.index_run_upload = 0
 
         self.protocal = None
         self.host = None
@@ -499,24 +500,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.request_counter += 1
         return self.request_counter
     
-    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
-        try:
-            if messageIsRequest:
-                requestInfo = self._helpers.analyzeRequest(messageInfo)
-                order_number = self.getNextOrderNumber()
-                self.request_map[messageInfo] = order_number
-                entry = LogEntry(order_number, str(requestInfo.getUrl()), requestInfo.getMethod(), "", "", "", "")
-                self.logTable.addLogEntry(entry)
-            else:
-                responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
-                order_number = self.request_map.get(messageInfo)
-                if order_number is not None:
-                    status_code = str(responseInfo.getStatusCode())
-                    length = str(len(messageInfo.getResponse().tostring()))
-                    time = str(messageInfo.getTime())  # Format the time as needed
-                    self.logTable.updateLogEntry(order_number, status_code, length, time)
-        except Exception as e:
-            print("Error processing HTTP message:", str(e))
 
 ### SEND REQUEST METHODS ###############    
     def get_HttpService_fromJText(self):
@@ -546,7 +529,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             if self.protocal == "http":
                 try:
                     # Create and send the request
+                    print("http service")
                     httpService = self.helpers.buildHttpService(self.host, self.port, False) # (java.lang.String host, int port, boolean useHttps)
+                    print("callbacks")
                     self.callbacks.makeHttpRequest(httpService, requestBytes)
                     print("Upload on http protocal successful!")
                 except IOError as e:
@@ -554,7 +539,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             elif self.protocal == "https":
                 try:
                     # Create and send the request
+                    print("https service")
                     httpService = self.helpers.buildHttpService(self.host, self.port, True) # (java.lang.String host, int port, boolean useHttps)
+                    print("callbacks")
                     self.callbacks.makeHttpRequest(httpService, requestBytes)
                     print("Upload on https protocal successful!")
                 except IOError as e:
@@ -563,6 +550,35 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                 print("Not found protocal in the target < http, https >")
                 print("Please fill the target follow this format -> http://example.com")
                 self.protocal, self.host = None, None
+
+    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
+        if messageIsRequest:
+            requestInfo = self.helpers.analyzeRequest(messageInfo)
+            url = requestInfo.getUrl().toString()
+            method = requestInfo.getMethod()
+            # You need to determine how to get the file path and order number
+            file_path = self.payload_files.getElementAt(self.index_run_upload)  # Placeholder
+            order_number = self.getNextOrderNumber()  # Implement this method
+
+            # Create a new log entry for the request
+            print("From Request" + str(self.index_run_upload))
+            print(url)
+            print(method)
+            print(file_path)
+            print(order_number)
+            # entry = LogEntry(order_number, url, method, file_path, "", "", "")
+            # self.logTable.addLogEntry(entry)
+        else:
+            responseInfo = self.helpers.analyzeResponse(messageInfo.getResponse())
+            status_code = responseInfo.getStatusCode()
+            length = len(messageInfo.getResponse().tostring())
+            time = str(messageInfo.getTime())  # Format the time as needed
+
+            # Update the log entry for this response
+            # self.updateLogEntry(responseInfo, status_code, length, time)
+            print(status_code)
+            print(length)
+            print(time)
                 
 
 
@@ -576,6 +592,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             if self.protocal is not None and self.host is not None and self.port is not None:
                 if self.mode == 1:
                         for i in range (1, self.payload_files.size()):
+                            self.index_run_upload = i
                             requestBytes = self.RequestObject.get_part(i) # b[]
                             self.sendRequest(requestBytes)
                     
