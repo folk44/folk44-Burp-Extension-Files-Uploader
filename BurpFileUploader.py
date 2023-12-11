@@ -4,6 +4,7 @@ import tempfile
 import mimetypes
 from array import array
 from time import sleep
+import threading
 
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
@@ -61,6 +62,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.RequestObject = None # ModifyRequest class
         self.request_counter = 0 # for run order number of request when upload
         self.request_map = {}
+        self.fullRequests = {}
+        self.fullResponses = {}
         self.index_run_upload = 0
 
         self.protocal = None
@@ -68,9 +71,14 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.port = None
         
     def registerExtenderCallbacks(self, callbacks): # for right click on request and send to our function
-        self.callbacks = callbacks # set callbacks
-        self.helpers = callbacks.getHelpers() # set helpers
+        self._callbacks = callbacks # set callbacks
+        self._helpers = callbacks.getHelpers() # set helpers
         callbacks.registerContextMenuFactory(self)  # registerContextMenuFactory 
+        
+        # register ourselves as a Proxy listener
+        # callbacks.registerProxyListener(self)
+
+        callbacks.registerHttpListener(self)
         
         # creating a message editor from burp to show request 
         self.requestViewerForPosition = callbacks.createMessageEditor(None, True)
@@ -172,7 +180,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         split_panel_position.setBottomComponent(preview_panel)
         self.positions_panel.add(split_panel_position, BorderLayout.CENTER)
 
-        self.callbacks.customizeUiComponent(self.editor_viewposition)
+        self._callbacks.customizeUiComponent(self.editor_viewposition)
 
 
 
@@ -261,7 +269,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         split_panel_payload.setBottomComponent(preview_panel)
         self.payloads_panel.add(split_panel_payload, BorderLayout.CENTER)
 
-        self.callbacks.customizeUiComponent(self.editor_view)
+        self._callbacks.customizeUiComponent(self.editor_view)
 
 
 
@@ -318,8 +326,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         split_panel_history.setBottomComponent(self.split_panel_detail)
         self.history_panel.add(split_panel_history, BorderLayout.CENTER)
 
-        self.callbacks.customizeUiComponent(self.editor_view_request)
-        self.callbacks.customizeUiComponent(self.editor_view_response)
+        self._callbacks.customizeUiComponent(self.editor_view_request)
+        self._callbacks.customizeUiComponent(self.editor_view_response)
         
         
         
@@ -334,7 +342,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # Register the extension
         callbacks.setExtensionName("Files Uploader")
         callbacks.addSuiteTab(self)
-
 
     def getTabCaption(self):
         return "Files Uploader"
@@ -511,7 +518,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                 if '://' in target:
                     split_text = re.split(r':?//', target, 1)
                     if split_text[0] and split_text[1]:
-                        self.protocal, self.host = split_text[0], split_text[1] # protocal, host
+                        self.protocal, self.host = str(split_text[0]), str(split_text[1]) # protocal, host
                         self.port = int(port)
                     else:
                         print("Please fill the target follow this format -> http://example.com")
@@ -524,61 +531,142 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         else:
             print("Please fill the port number!")
             self.protocal, self.host, self.port = None, None, None
+
+    def sendRequestInThread(self, requestBytes):
+        print("in sendRequestInThread")
+        t = threading.Thread(target=self.sendRequest, args=[self.host, self.port, self.protocal, requestBytes])
+        t.start()
+
     
-    def sendRequest(self, requestBytes):
-            if self.protocal == "http":
-                try:
-                    # Create and send the request
-                    print("http service")
-                    httpService = self.helpers.buildHttpService(self.host, self.port, False) # (java.lang.String host, int port, boolean useHttps)
-                    print("callbacks")
-                    self.callbacks.makeHttpRequest(httpService, requestBytes)
-                    print("Upload on http protocal successful!")
-                except IOError as e:
-                    print("Error sending request with http : " + str(e))
-            elif self.protocal == "https":
-                try:
-                    # Create and send the request
-                    print("https service")
-                    httpService = self.helpers.buildHttpService(self.host, self.port, True) # (java.lang.String host, int port, boolean useHttps)
-                    print("callbacks")
-                    self.callbacks.makeHttpRequest(httpService, requestBytes)
-                    print("Upload on https protocal successful!")
-                except IOError as e:
-                    print("Error sending request with https : " + str(e))
+    def sendRequest(self, host, port, protocal, requestBytes):
+        print("in sendRequest")
+        if protocal == "http" or protocal == "https":
+            try:
+                # Create and send the request
+                print(protocal + " service")
+                # print(type(protocal))
+                http_Service = self._helpers.buildHttpService(host, port, protocal) # (java.lang.String host, int port, boolean useHttps)
+                # print(requestBytes)
+                print(type(requestBytes))
+                print(port)
+                print(type(port))
+                print(host)
+                print(type(host))
+                print("start makeBurpRequest")
+                RR = self._callbacks.makeHttpRequest(http_Service, requestBytes)
+                print("Upload on " + protocal + " protocal successful!")
+            except Exception as e:
+                print("Error sending request with http : " + str(e))
+
+            if RR:
+                print(RR.getRequest)
+                print(RR.getResponse)
             else:
-                print("Not found protocal in the target < http, https >")
-                print("Please fill the target follow this format -> http://example.com")
-                self.protocal, self.host = None, None
+                print("No response received")
+        
+        else:
+            print("Not found protocal in the target < http, https >")
+            print("Please fill the target follow this format -> http://example.com")
+            self.host, self.port, self.protocal = None, None, None
+
+##############################
+
+
+        # t = threading.Thread(target=self.makeBurpRequest, args=[self.host, self.port, False, requestBytes])
+        # t.daemon = True
+        # t.start()
+##############################
+
+        # try:
+        #     httpService = self._helpers.buildHttpService(self.host, self.port, self.protocal) # (java.lang.String host, int port, boolean useHttps)
+        #     print(httpService)
+        #     print("after buildHttpService")
+        #     responseBytes = self._callbacks.makeHttpRequest(httpService, requestBytes)
+        #     print(responseBytes)
+        #     print("after makeHttpRequest")
+            
+        #     # Check if response is received
+        #     if responseBytes:
+        #         print("Response received:")
+        #         responseInfo = self._helpers.analyzeResponse(responseBytes)
+        #         response = self._helpers.bytesToString(responseBytes)
+        #         print(response)
+                
+        #     else:
+        #         print("No response received.")
+
+        # except Exception as e:
+        #     print("Error sending HTTP request:", str(e))
+
+
+        
+
+
+    # def makeBurpRequest(self, host, port, protocol_choice, request):
+    #     print("start makeBurpRequest")
+    #     print(host)
+    #     print(type(port))
+    #     print(type(protocol_choice))
+    #     print(request)
+    #     resp = self._callbacks.makeHttpRequest(host, port, protocol_choice, request)
+    #     print(resp.getResponse())
+    #     print("end makeBurpRequest")
+
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
-        if messageIsRequest:
-            requestInfo = self.helpers.analyzeRequest(messageInfo)
-            url = requestInfo.getUrl().toString()
-            method = requestInfo.getMethod()
-            # You need to determine how to get the file path and order number
-            file_path = self.payload_files.getElementAt(self.index_run_upload)  # Placeholder
-            order_number = self.getNextOrderNumber()  # Implement this method
+        if (toolFlag == self._callbacks.TOOL_EXTENDER):
+            print("start processHttpMessage")
+            try:
+                if messageIsRequest:
+                    print("start messageIsRequest")
+                    requestInfo = self._helpers.analyzeRequest(messageInfo)
+                    url = requestInfo.getUrl().toString()
+                    method = requestInfo.getMethod()
+                    # You need to determine how to get the file path and order number
+                    file_path = self.payload_files.getElementAt(self.index_run_upload)  # Placeholder
+                    order_number = self.getNextOrderNumber()  # Implement this method
+                    self.request_map[messageInfo] = order_number
+                    requestBytes = messageInfo.getRequest()
+                    if requestBytes:
+                            self.fullRequests[order_number] = self._helpers.bytesToString(requestBytes)
+                            print(self.fullRequests[order_number])
+                    
+                    # Create a new log entry for the request
+                    print("From Request -> " + str(self.index_run_upload))
+                    print(url)
+                    print(method)
+                    print(file_path)
+                    print(order_number)
+                    print("End of messageIsRequest")
+                    print("===============================")
+                    
+                    # entry = LogEntry(order_number, url, method, file_path, "", "", "")
+                    # self.logTable.addLogEntry(entry)
+                else:
+                    print("start messageIsNotRequest")
+                    responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
+                    order_number = self.request_map.get(messageInfo)
+                    if order_number is not None:
+                        responseBytes = messageInfo.getResponse()
+                        if responseBytes:
+                            self.fullResponses[order_number] = self._helpers.bytesToString(responseBytes)
+                            print(self.fullResponses[order_number])
+                        status_code = responseInfo.getStatusCode()
+                        length = len(messageInfo.getResponse().tostring())
+                        time = str(messageInfo.getTime())  # Format the time as needed
 
-            # Create a new log entry for the request
-            print("From Request" + str(self.index_run_upload))
-            print(url)
-            print(method)
-            print(file_path)
-            print(order_number)
-            # entry = LogEntry(order_number, url, method, file_path, "", "", "")
-            # self.logTable.addLogEntry(entry)
-        else:
-            responseInfo = self.helpers.analyzeResponse(messageInfo.getResponse())
-            status_code = responseInfo.getStatusCode()
-            length = len(messageInfo.getResponse().tostring())
-            time = str(messageInfo.getTime())  # Format the time as needed
+                    # Update the log entry for this response
+                    # self.logTable.updateLogEntry(responseInfo, status_code, length, time)
+                    print("From Response -> " + str(order_number))
+                    # print(messageInfo.getResponse().tostring())
+                    print(status_code)
+                    print(length)
+                    print(time)
+                    print("End of messageIsNotRequest")
+                    print("===============================")
 
-            # Update the log entry for this response
-            # self.updateLogEntry(responseInfo, status_code, length, time)
-            print(status_code)
-            print(length)
-            print(time)
+            except Exception as e:
+                print("Error processing HTTP message:", str(e))
                 
 
 
@@ -594,12 +682,16 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                         for i in range (1, self.payload_files.size()):
                             self.index_run_upload = i
                             requestBytes = self.RequestObject.get_part(i) # b[]
-                            self.sendRequest(requestBytes)
+                            print("get requestBytes mode 1")
+                            # self.sendRequest(requestBytes)
+                            self.sendRequestInThread(requestBytes)
                     
 
                 elif self.mode == 2:
                     requestBytes = self.RequestObject.get_part(1)
-                    self.sendRequest(requestBytes)
+                    print("get requestBytes mode 2")
+                    # self.sendRequest(requestBytes)
+                    self.sendRequestInThread(requestBytes)
 
         else:
             print("Please generate request before upload!")
