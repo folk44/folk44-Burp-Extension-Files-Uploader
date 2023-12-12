@@ -4,34 +4,34 @@ User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/201001
 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
 Accept-Language: en-US,en;q=0.5
 Accept-Encoding: gzip, deflate, br
-Content-Type: multipart/form-data; boundary=---------------------------424886558622502888872275014959
-Content-Length: 15042
+Content-Type: multipart/form-data; boundary=---------------------------39018582685866979351861723033
+Content-Length: 15030
 Origin: http://foophones.securitybrigade.com:8080
 Connection: close
 Referer: http://foophones.securitybrigade.com:8080/register.php
 Upgrade-Insecure-Requests: 1
 
------------------------------424886558622502888872275014959
+-----------------------------39018582685866979351861723033
 Content-Disposition: form-data; name="fname"
 
-dfvz
------------------------------424886558622502888872275014959
+jbhk
+-----------------------------39018582685866979351861723033
 Content-Disposition: form-data; name="lname"
 
-dzxbg
------------------------------424886558622502888872275014959
+bhk
+-----------------------------39018582685866979351861723033
 Content-Disposition: form-data; name="country"
 
-zdgb
------------------------------424886558622502888872275014959
+hjb
+-----------------------------39018582685866979351861723033
 Content-Disposition: form-data; name="user"
 
-dzbg
------------------------------424886558622502888872275014959
+jhi
+-----------------------------39018582685866979351861723033
 Content-Disposition: form-data; name="pass"
 
-dzfbg
------------------------------424886558622502888872275014959
+ihbh
+-----------------------------39018582685866979351861723033
 Content-Disposition: form-data; name="avatar"; filename="file.json"
 Content-Type: application/json
 
@@ -40,7 +40,7 @@ Content-Type: application/json
     "size": "Large",
     "color": "Red"
 }
------------------------------424886558622502888872275014959--
+-----------------------------39018582685866979351861723033--
 
 --*--
 -*-*-

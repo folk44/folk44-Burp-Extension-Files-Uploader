@@ -1,0 +1,66 @@
+get requestBytes mode 1
+in sendRequestInThread
+in sendRequest
+http service
+start makeBurpRequest
+start processHttpMessage
+start messageIsRequest
+burp.Zofi@3c7726a0
+Tue Dec 12 17:51:54 ICT 2023 http://foophones.securitybrigade.com:8080/register_confirm.php POST /Users/folk44/file.json
+1
+<type 'int'>
+Order Number : 1
+POST /register_confirm.php HTTP/1.1
+Host: foophones.securitybrigade.com:8080
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate, br
+Content-Type: multipart/form-data; boundary=---------------------------39018582685866979351861723033
+Content-Length: 15030
+Origin: http://foophones.securitybrigade.com:8080
+Connection: close
+Referer: http://foophones.securitybrigade.com:8080/register.php
+Upgrade-Insecure-Requests: 1
+
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="fname"
+
+jbhk
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="lname"
+
+bhk
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="country"
+
+hjb
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="user"
+
+jhi
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="pass"
+
+ihbh
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="avatar"; filename="file.json"
+Content-Type: application/json
+
+{
+    "fruit": "Apple",
+    "size": "Large",
+    "color": "Red"
+}
+-----------------------------39018582685866979351861723033--
+
+End of messageIsRequest
+===============================
+start processHttpMessage
+start messageIsNotRequest
+burp.Zofi@429b5f0b
+End of messageIsNotRequest
+===============================
+===============================
+end sendRequest
+===============================

@@ -5,6 +5,8 @@ import mimetypes
 from array import array
 from time import sleep
 import threading
+import Queue
+
 
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
@@ -43,7 +45,7 @@ from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
 from java.awt.event import ActionListener
 from javax.swing import JMenuItem
-from java.util import ArrayList
+from java.util import ArrayList, Date
 from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableModel
 from javax.swing.event import DocumentListener
 
@@ -64,7 +66,12 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.request_map = {}
         self.fullRequests = {}
         self.fullResponses = {}
-        self.index_run_upload = 0
+        self.index_file_running = 0
+
+        # self.request_queue = Queue.Queue()
+        # self.worker_thread = threading.Thread(target=self.process_queue)    
+        # self.worker_thread.start()
+        
 
         self.protocal = None
         self.host = None
@@ -507,6 +514,10 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.request_counter += 1
         return self.request_counter
     
+    def getNextFilePath(self):
+        self.index_file_running += 1
+        return self.payload_files.getElementAt(self.index_file_running)
+    
 
 ### SEND REQUEST METHODS ###############    
     def get_HttpService_fromJText(self):
@@ -533,142 +544,108 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             self.protocal, self.host, self.port = None, None, None
 
     def sendRequestInThread(self, requestBytes):
+        # print("Queueing request")
+        # self.request_queue.put(requestBytes)
         print("in sendRequestInThread")
         t = threading.Thread(target=self.sendRequest, args=[self.host, self.port, self.protocal, requestBytes])
         t.start()
+        t.join()
 
     
     def sendRequest(self, host, port, protocal, requestBytes):
         print("in sendRequest")
-        if protocal == "http" or protocal == "https":
-            try:
-                # Create and send the request
-                print(protocal + " service")
-                # print(type(protocal))
-                http_Service = self._helpers.buildHttpService(host, port, protocal) # (java.lang.String host, int port, boolean useHttps)
-                # print(requestBytes)
-                print(type(requestBytes))
-                print(port)
-                print(type(port))
-                print(host)
-                print(type(host))
-                print("start makeBurpRequest")
-                RR = self._callbacks.makeHttpRequest(http_Service, requestBytes)
-                print("Upload on " + protocal + " protocal successful!")
-            except Exception as e:
-                print("Error sending request with http : " + str(e))
+        try:
+            # Create HTTP service
+            print(protocal + " service")
+            http_Service = self._helpers.buildHttpService(host, port, protocal) # (java.lang.String host, int port, boolean useHttps)
 
-            if RR:
-                print(RR.getRequest)
-                print(RR.getResponse)
-            else:
-                print("No response received")
-        
-        else:
-            print("Not found protocal in the target < http, https >")
-            print("Please fill the target follow this format -> http://example.com")
-            self.host, self.port, self.protocal = None, None, None
-
-##############################
-
-
-        # t = threading.Thread(target=self.makeBurpRequest, args=[self.host, self.port, False, requestBytes])
-        # t.daemon = True
-        # t.start()
-##############################
-
-        # try:
-        #     httpService = self._helpers.buildHttpService(self.host, self.port, self.protocal) # (java.lang.String host, int port, boolean useHttps)
-        #     print(httpService)
-        #     print("after buildHttpService")
-        #     responseBytes = self._callbacks.makeHttpRequest(httpService, requestBytes)
-        #     print(responseBytes)
-        #     print("after makeHttpRequest")
+            # Send request
+            print("start makeBurpRequest")
+            self._callbacks.makeHttpRequest(http_Service, requestBytes)
             
-        #     # Check if response is received
-        #     if responseBytes:
-        #         print("Response received:")
-        #         responseInfo = self._helpers.analyzeResponse(responseBytes)
-        #         response = self._helpers.bytesToString(responseBytes)
-        #         print(response)
-                
-        #     else:
-        #         print("No response received.")
 
-        # except Exception as e:
-        #     print("Error sending HTTP request:", str(e))
-
-
+        except Exception as e:
+            print("Error sending request : " + str(e))
         
+        print("end sendRequest")
+        print("===============================")
 
-
-    # def makeBurpRequest(self, host, port, protocol_choice, request):
-    #     print("start makeBurpRequest")
-    #     print(host)
-    #     print(type(port))
-    #     print(type(protocol_choice))
-    #     print(request)
-    #     resp = self._callbacks.makeHttpRequest(host, port, protocol_choice, request)
-    #     print(resp.getResponse())
-    #     print("end makeBurpRequest")
 
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
         if (toolFlag == self._callbacks.TOOL_EXTENDER):
             print("start processHttpMessage")
-            try:
-                if messageIsRequest:
-                    print("start messageIsRequest")
-                    requestInfo = self._helpers.analyzeRequest(messageInfo)
-                    url = requestInfo.getUrl().toString()
-                    method = requestInfo.getMethod()
-                    # You need to determine how to get the file path and order number
-                    file_path = self.payload_files.getElementAt(self.index_run_upload)  # Placeholder
-                    order_number = self.getNextOrderNumber()  # Implement this method
-                    self.request_map[messageInfo] = order_number
-                    requestBytes = messageInfo.getRequest()
-                    if requestBytes:
-                            self.fullRequests[order_number] = self._helpers.bytesToString(requestBytes)
-                            print(self.fullRequests[order_number])
-                    
+            # try:
+            if messageIsRequest:
+                print("start messageIsRequest")
+                print(messageInfo)
+                order_number = self.getNextOrderNumber()
+                timestamp = Date()
+                requestInfo = self._helpers.analyzeRequest(messageInfo)
+                
+                url = requestInfo.getUrl().toString()
+                method = requestInfo.getMethod()
+                file_path = self.getNextFilePath()
+
+                print(timestamp.toString() + " " + url + " " + method + " " + file_path)
+
+                self.request_map[str(messageInfo)] = order_number
+                print(self.request_map[str(messageInfo)])
+                print(type(self.request_map[str(messageInfo)]))
+                requestBytes = messageInfo.getRequest()
+                if requestBytes:
+                    self.fullRequests[order_number] = buffer(requestBytes)
+                    print("Order Number : " + str(order_number))
+                    print(self.fullRequests[order_number])
+                
                     # Create a new log entry for the request
-                    print("From Request -> " + str(self.index_run_upload))
-                    print(url)
-                    print(method)
-                    print(file_path)
-                    print(order_number)
-                    print("End of messageIsRequest")
-                    print("===============================")
-                    
-                    # entry = LogEntry(order_number, url, method, file_path, "", "", "")
+                    # entry = LogEntry(order_number, url, method, "", "", "", timestamp)
                     # self.logTable.addLogEntry(entry)
-                else:
-                    print("start messageIsNotRequest")
-                    responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
-                    order_number = self.request_map.get(messageInfo)
-                    if order_number is not None:
-                        responseBytes = messageInfo.getResponse()
-                        if responseBytes:
-                            self.fullResponses[order_number] = self._helpers.bytesToString(responseBytes)
-                            print(self.fullResponses[order_number])
+                print("End of messageIsRequest")
+                print("===============================")
+                
+                
+            elif not messageIsRequest:
+                print("start messageIsNotRequest")
+                print(messageInfo)
+                responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
+                order_number = self.request_map.get(str(messageInfo))
+                if order_number is not None:
+                    responseBytes = messageInfo.getResponse()
+                    print("Order Number : " + str(order_number))
+                    if responseBytes:
+                        self.fullResponses[order_number] = buffer(responseBytes)
+                        print(self.fullResponses[order_number])
                         status_code = responseInfo.getStatusCode()
                         length = len(messageInfo.getResponse().tostring())
-                        time = str(messageInfo.getTime())  # Format the time as needed
-
-                    # Update the log entry for this response
-                    # self.logTable.updateLogEntry(responseInfo, status_code, length, time)
-                    print("From Response -> " + str(order_number))
-                    # print(messageInfo.getResponse().tostring())
-                    print(status_code)
-                    print(length)
-                    print(time)
-                    print("End of messageIsNotRequest")
-                    print("===============================")
-
-            except Exception as e:
-                print("Error processing HTTP message:", str(e))
+                        print(str(status_code) + " " + str(length))
                 
 
+                # Update the log entry for this response
+                # self.logTable.updateLogEntry(responseInfo, status_code, length)
+                
+                print("End of messageIsNotRequest")
+                print("===============================")
+                print("===============================")
+            else:
+                print("Not found request or response")
+
+            # except Exception as e:
+            #     print("Error processing HTTP message:", str(e))
+
+    # def process_queue(self):
+    #     while True:
+    #         requestBytes = self.request_queue.get()
+    #         if requestBytes is None:
+    #             # None is used as a signal to stop.
+    #             break
+    #         self.sendRequest(self.host, self.port, self.protocol, requestBytes)
+    #         self.request_queue.task_done()            
+    
+    # def stop(self):
+    #     # Use this method to stop the thread when your program is closing
+    #     self.request_queue.put(None)
+    #     self.worker_thread.join()
 
 
 ### MAIN METHODS ###############
@@ -677,21 +654,30 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             # save message in payload message editor
             self.RequestObject.replace_part(self.current_index, buffer(self.requestViewerForPayload.getMessage()))
             self.get_HttpService_fromJText()
-            if self.protocal is not None and self.host is not None and self.port is not None:
-                if self.mode == 1:
-                        for i in range (1, self.payload_files.size()):
-                            self.index_run_upload = i
-                            requestBytes = self.RequestObject.get_part(i) # b[]
-                            print("get requestBytes mode 1")
-                            # self.sendRequest(requestBytes)
-                            self.sendRequestInThread(requestBytes)
-                    
-
-                elif self.mode == 2:
-                    requestBytes = self.RequestObject.get_part(1)
-                    print("get requestBytes mode 2")
-                    # self.sendRequest(requestBytes)
-                    self.sendRequestInThread(requestBytes)
+            if self.protocal == "http" or self.protocal == "https":
+                if self.host is not None and self.port is not None:
+                    if self.mode == 1:
+                            
+                            self.index_file_running = 0
+                            for i in range (1, self.payload_files.size()):
+                                requestBytes = self.RequestObject.get_part(i) # b[]
+                                print("get requestBytes mode 1")
+                                # self.sendRequest(requestBytes)
+                                self.sendRequestInThread(requestBytes)
+                            
+                                
+                        
+                    elif self.mode == 2:
+                        self.index_file_running = 1
+                        requestBytes = self.RequestObject.get_part(1)
+                        print("get requestBytes mode 2")
+                        # self.sendRequest(requestBytes)
+                        self.sendRequestInThread(requestBytes)
+                        
+            else:
+                print("Not found protocal in the target < http, https >")
+                print("Please fill the target follow this format -> http://example.com")
+                self.host, self.port, self.protocal = None, None, None
 
         else:
             print("Please generate request before upload!")
