@@ -64,8 +64,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.RequestObject = None # ModifyRequest class
         self.request_counter = 0 # for run order number of request when upload
         self.request_map = {}
+        self.response_map = {}
         self.fullRequests = {}
-        self.fullResponses = {}
+        self.fullResponses = {} 
         self.index_file_running = 0
 
         # self.request_queue = Queue.Queue()
@@ -562,7 +563,11 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             # Send request
             print("start makeBurpRequest")
             self._callbacks.makeHttpRequest(http_Service, requestBytes)
-            
+            # if RR:
+            #     print(RR.getRequest())
+            #     print(RR.getResponse())
+            print(self.request_map)
+            print(self.response_map)
 
         except Exception as e:
             print("Error sending request : " + str(e))
@@ -575,63 +580,68 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
         if (toolFlag == self._callbacks.TOOL_EXTENDER):
             print("start processHttpMessage")
-            # try:
-            if messageIsRequest:
-                print("start messageIsRequest")
-                print(messageInfo)
-                order_number = self.getNextOrderNumber()
-                timestamp = Date()
-                requestInfo = self._helpers.analyzeRequest(messageInfo)
-                
-                url = requestInfo.getUrl().toString()
-                method = requestInfo.getMethod()
-                file_path = self.getNextFilePath()
+            try:
+                if messageIsRequest:
+                    print("start messageIsRequest")
+                    print(messageInfo)
+                    order_number = self.getNextOrderNumber()
+                    timestamp = Date()
+                    requestInfo = self._helpers.analyzeRequest(messageInfo)
+                    
+                    url = requestInfo.getUrl().toString()
+                    method = requestInfo.getMethod()
+                    file_path = self.getNextFilePath()
 
-                print(timestamp.toString() + " " + url + " " + method + " " + file_path)
-
-                self.request_map[str(messageInfo)] = order_number
-                print(self.request_map[str(messageInfo)])
-                print(type(self.request_map[str(messageInfo)]))
-                requestBytes = messageInfo.getRequest()
-                if requestBytes:
-                    self.fullRequests[order_number] = buffer(requestBytes)
                     print("Order Number : " + str(order_number))
-                    print(self.fullRequests[order_number])
-                
-                    # Create a new log entry for the request
-                    # entry = LogEntry(order_number, url, method, "", "", "", timestamp)
-                    # self.logTable.addLogEntry(entry)
-                print("End of messageIsRequest")
-                print("===============================")
-                
-                
-            elif not messageIsRequest:
-                print("start messageIsNotRequest")
-                print(messageInfo)
-                responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
-                order_number = self.request_map.get(str(messageInfo))
-                if order_number is not None:
-                    responseBytes = messageInfo.getResponse()
+                    print(timestamp.toString() + " " + url + " " + method + " " + file_path)
+                    print(type(messageInfo))
+                    self.request_map[order_number] = messageInfo
+
+                    # print(self.request_map[order_number]["request"])
+                    # print(type(self.request_map[order_number]["request"]))
+
+                    requestBytes = messageInfo.getRequest()
+                    if requestBytes:
+                        self.fullRequests[order_number] = buffer(requestBytes)
+                        print(self.fullRequests[order_number])
+                    
+                        # Create a new log entry for the request
+                        # entry = LogEntry(order_number, url, method, "", "", "", timestamp)
+                        # self.logTable.addLogEntry(entry)
+                    print("End of messageIsRequest")
+                    print("===============================")
+                    
+                    
+                elif not messageIsRequest:
+                    print("start messageIsNotRequest")
+                    print(messageInfo)
+                    order_number = self.request_counter
+                    responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
+
                     print("Order Number : " + str(order_number))
-                    if responseBytes:
-                        self.fullResponses[order_number] = buffer(responseBytes)
-                        print(self.fullResponses[order_number])
-                        status_code = responseInfo.getStatusCode()
-                        length = len(messageInfo.getResponse().tostring())
-                        print(str(status_code) + " " + str(length))
-                
 
-                # Update the log entry for this response
-                # self.logTable.updateLogEntry(responseInfo, status_code, length)
-                
-                print("End of messageIsNotRequest")
-                print("===============================")
-                print("===============================")
-            else:
-                print("Not found request or response")
+                    if order_number is not None:
+                        self.response_map[order_number] = messageInfo
+                        responseBytes = messageInfo.getResponse()
+                        if responseBytes:
+                            self.fullResponses[order_number] = buffer(responseBytes)
+                            status_code = responseInfo.getStatusCode()
+                            length = len(messageInfo.getResponse().tostring())
+                            print(str(status_code) + " " + str(length))
+                            print(self.fullResponses[order_number])
+                    
 
-            # except Exception as e:
-            #     print("Error processing HTTP message:", str(e))
+                    # Update the log entry for this response
+                    # self.logTable.updateLogEntry(responseInfo, status_code, length)
+                    
+                    print("End of messageIsNotRequest")
+                    print("===============================")
+                    print("===============================")
+                else:
+                    print("Not found request or response")
+
+            except Exception as e:
+                print("Error processing HTTP message:", str(e))
 
     # def process_queue(self):
     #     while True:
@@ -664,7 +674,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                                 print("get requestBytes mode 1")
                                 # self.sendRequest(requestBytes)
                                 self.sendRequestInThread(requestBytes)
-                            
+                            print(">> Display <<")
+                            print(buffer(self.request_map[1].getRequest()))
                                 
                         
                     elif self.mode == 2:

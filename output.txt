@@ -5,11 +5,10 @@ http service
 start makeBurpRequest
 start processHttpMessage
 start messageIsRequest
-burp.Zofi@3c7726a0
-Tue Dec 12 17:51:54 ICT 2023 http://foophones.securitybrigade.com:8080/register_confirm.php POST /Users/folk44/file.json
-1
-<type 'int'>
+burp.Zofi@8ca1c62
 Order Number : 1
+Wed Dec 13 02:20:38 ICT 2023 http://foophones.securitybrigade.com:8080/register_confirm.php POST /Users/folk44/file.json
+<type 'burp.Zofi'>
 POST /register_confirm.php HTTP/1.1
 Host: foophones.securitybrigade.com:8080
 User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0
@@ -58,9 +57,96 @@ End of messageIsRequest
 ===============================
 start processHttpMessage
 start messageIsNotRequest
-burp.Zofi@429b5f0b
+burp.Zofi@2b901db5
+Order Number : 1
+200 1115
+HTTP/1.1 200 OK
+Date: Tue, 12 Dec 2023 19:23:55 GMT
+Server: Apache/2.2.22 (Ubuntu)
+X-Powered-By: PHP/5.3.10-1ubuntu3.48
+Vary: Accept-Encoding
+Content-Length: 901
+Connection: close
+Content-Type: text/html
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<title>Security Brigade - Labs</title>
+<meta name="keywords" content="" />
+<meta name="description" content="" />
+<link href="layout.css" rel="stylesheet" type="text/css" media="screen" />
+</head>
+<body>
+<div id="wrapper">
+	<div id="logo">
+		<h1>Foo Phones</h1>
+		<p>A mobile phones (vulnerable) company</p>
+	</div>
+	<div id="menu">
+		<ul>
+			<li><a href="index.php" class="active">Home</a></li>
+			
+						<li><a href="login.php">Log in</a></li>
+			<li><a href="register.php">Register</a></li>
+			
+		</ul>	</div>
+	<div id="header">&nbsp;</div>
+	<div id="page">
+		<div id="content">
+			<h1>Register</h1>
+					
+					Username exists!
 End of messageIsNotRequest
 ===============================
 ===============================
+{1: burp.Zofi@8ca1c62}
+{1: burp.Zofi@2b901db5}
 end sendRequest
 ===============================
+>> Display <<
+POST /register_confirm.php HTTP/1.1
+Host: foophones.securitybrigade.com:8080
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate, br
+Content-Type: multipart/form-data; boundary=---------------------------39018582685866979351861723033
+Content-Length: 15030
+Origin: http://foophones.securitybrigade.com:8080
+Connection: close
+Referer: http://foophones.securitybrigade.com:8080/register.php
+Upgrade-Insecure-Requests: 1
+
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="fname"
+
+jbhk
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="lname"
+
+bhk
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="country"
+
+hjb
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="user"
+
+jhi
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="pass"
+
+ihbh
+-----------------------------39018582685866979351861723033
+Content-Disposition: form-data; name="avatar"; filename="file.json"
+Content-Type: application/json
+
+{
+    "fruit": "Apple",
+    "size": "Large",
+    "color": "Red"
+}
+-----------------------------39018582685866979351861723033--
+
