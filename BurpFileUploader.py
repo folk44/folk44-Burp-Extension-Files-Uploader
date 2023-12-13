@@ -45,7 +45,7 @@ from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
 from java.awt.event import ActionListener, MouseAdapter
 from javax.swing import JMenuItem
-from java.util import ArrayList, Date
+from java.util import ArrayList, Date, Comparator
 from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableModel
 from javax.swing.event import DocumentListener
 
@@ -306,13 +306,14 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
         # Setting initial column widths
         columnModel = self.table.getColumnModel()
-        columnWidths = [10, 500, 20, 300, 20, 20, 100] 
+        columnWidths = [10, 400, 20, 300, 20, 20, 100] 
         for i in range(len(columnWidths)):
             column = columnModel.getColumn(i)
             column.setPreferredWidth(columnWidths[i])
         
-        # Enable sorting
+        # Enable sorting and set a custom comparator for the first column
         sorter = TableRowSorter(self.table.getModel())
+        sorter.setComparator(0, IntegerComparator())  # Assuming the first column is the order number
         self.table.setRowSorter(sorter)
 
         self.table_scrollPane = JScrollPane(self.table)
@@ -866,6 +867,9 @@ class HttpHistoryTableModel(AbstractTableModel):
             return self.data[rowIndex]
         return None
     
+class IntegerComparator(Comparator):
+    def compare(self, o1, o2):
+        return int(o1) - int(o2)
 
 
 class ModifyRequest:
