@@ -865,7 +865,7 @@ class HttpHistoryTableModel(AbstractTableModel):
         if rowIndex < len(self.data):
             return self.data[rowIndex]
         return None
-
+    
 
 
 class ModifyRequest:
@@ -1093,6 +1093,10 @@ class ModifyRequest:
                     edited_data = temp_file.read()
                     footer = start_boundary + b'--\r\n'
                     body = edited_data + footer
+
+                    # Modify header
+                    header = self.change_content_length(header, length=len(body))
+
                     final_message = header + b'\r\n' + body
 
                     # Save the modified data to a new binary file
