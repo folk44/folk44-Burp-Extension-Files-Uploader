@@ -43,7 +43,7 @@ from burp import IHttpListener
 from burp import IContextMenuFactory, IContextMenuInvocation
 from java.awt import Toolkit
 from java.awt.datatransfer import StringSelection
-from java.awt.event import ActionListener
+from java.awt.event import ActionListener, MouseAdapter
 from javax.swing import JMenuItem
 from java.util import ArrayList, Date
 from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableModel
@@ -300,7 +300,10 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     # 1) History Table
         self.table_model = HttpHistoryTableModel()
         self.table = JTable(self.table_model)
-        
+
+        # Add a mouse listener to the table for row click events
+        self.table.addMouseListener(MouseAdapter(self))
+
         # Setting initial column widths
         columnModel = self.table.getColumnModel()
         columnWidths = [10, 500, 20, 300, 20, 20, 100] 
@@ -519,6 +522,17 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.index_file_running += 1
         return self.payload_files.getElementAt(self.index_file_running)
     
+    def updateRequestResponseViews(self, row):
+        modelRow = self.table.convertRowIndexToModel(row)
+        order_number = self.table_model.getValueAt(modelRow, 0)  # Assuming order number is in the first column
+
+        up_request = (self.request_map.get(order_number)).getRequest()
+        up_response = (self.response_map.get(order_number)).getResponse()
+
+        if up_request is not None:
+            self.requestViewerForHistory.setMessage(up_request, True)
+        if up_response is not None:
+            self.responseViewerForHistory.setMessage(up_response, False)
 
 ### SEND REQUEST METHODS ###############    
     def get_HttpService_fromJText(self):
@@ -597,8 +611,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                     print(type(messageInfo))
                     self.request_map[order_number] = messageInfo
 
-                    # print(self.request_map[order_number]["request"])
-                    # print(type(self.request_map[order_number]["request"]))
 
                     requestBytes = messageInfo.getRequest()
                     if requestBytes:
@@ -606,8 +618,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                         print(self.fullRequests[order_number])
                     
                         # Create a new log entry for the request
-                        # entry = LogEntry(order_number, url, method, "", "", "", timestamp)
-                        # self.logTable.addLogEntry(entry)
+                        entry = LogEntry(order_number, url, method, file_path, "", "", timestamp)
+                        self.table_model.addLogEntry(entry)
                     print("End of messageIsRequest")
                     print("===============================")
                     
@@ -629,10 +641,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                             length = len(messageInfo.getResponse().tostring())
                             print(str(status_code) + " " + str(length))
                             print(self.fullResponses[order_number])
-                    
-
-                    # Update the log entry for this response
-                    # self.logTable.updateLogEntry(responseInfo, status_code, length)
+                            # Update the log entry for this response
+                            self.table_model.updateLogEntry(order_number, status_code, length)
                     
                     print("End of messageIsNotRequest")
                     print("===============================")
@@ -742,6 +752,16 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
     def getResponse(self):
         return self._invocation.getSelectedMessages()[0].getResponse() # byte[]
+        
+    #  MouseAdapter class to handle mouse events
+class MouseAdapter(MouseAdapter):
+    def __init__(self, extender):
+        self.extender = extender
+
+    def mouseClicked(self, e):
+        row = self.extender.table.rowAtPoint(e.getPoint())
+        if row >= 0:
+            self.extender.updateRequestResponseViews(row)
 
 
 class UploadModeActionListener(ActionListener):
@@ -755,6 +775,7 @@ class UploadModeActionListener(ActionListener):
 
         # Pass the selected mode name to the setUploadMode method
         self._extender.setUploadMode(selected_mode)
+
 
 
 class IntegerDocumentFilter(DocumentListener):
@@ -801,6 +822,9 @@ class LogEntry:
         self.status_code = status_code
         self.length = length
         self.time = time
+    
+    def getRowData(self):
+        return [self.order_number, self.url, self.method, self.file_path, self.status_code, self.length, self.time]
 
 class HttpHistoryTableModel(AbstractTableModel):
     column_names = ("#", "URL", "Method", "File path", "Status code", "Length", "Time")
@@ -820,9 +844,27 @@ class HttpHistoryTableModel(AbstractTableModel):
     def getValueAt(self, rowIndex, columnIndex):
         return self.data[rowIndex][columnIndex]
 
-    def addEntry(self, entry):
-        self.data.append(entry)
+    def addLogEntry(self, logEntry):
+        self.data.append(logEntry.getRowData())
         self.fireTableRowsInserted(len(self.data) - 1, len(self.data) - 1)
+
+    def updateLogEntry(self, order_number, status_code, length):
+        rowIndex = self.findRowIndexByOrderNumber(order_number)
+        if rowIndex != -1:
+            self.data[rowIndex][4] = status_code  # Update status code
+            self.data[rowIndex][5] = length       # Update length
+            self.fireTableRowsUpdated(rowIndex, rowIndex)
+
+    def findRowIndexByOrderNumber(self, order_number):
+        for i, entry in enumerate(self.data):
+            if entry[0] == order_number:  # Assuming order number is at index 0
+                return i
+        return -1
+
+    def getLogEntry(self, rowIndex):
+        if rowIndex < len(self.data):
+            return self.data[rowIndex]
+        return None
 
 
 
