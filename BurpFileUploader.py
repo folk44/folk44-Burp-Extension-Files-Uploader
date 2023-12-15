@@ -72,7 +72,9 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # self.request_queue = Queue.Queue()
         # self.worker_thread = threading.Thread(target=self.process_queue)    
         # self.worker_thread.start()
-        
+        self.Notification_position = manageNotification()
+        self.Notification_payload = manageNotification()
+        self.Notification_history = manageNotification()
 
         self.protocal = None
         self.host = None
@@ -111,12 +113,16 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         split_panel_position.setDividerLocation(250)
         split_panel_position.setBorder(None)
 
+        
     # Start upload button
-        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
         self.start_upload_button = JButton("Start upload", actionPerformed=self.start_upload)
         self.start_upload_button.setBackground(Color(255, 102, 51))
         self.start_upload_button.setForeground(Color.WHITE)
         self.start_upload_button.setFont(Font(self.start_upload_button.getFont().getName(), Font.BOLD, self.start_upload_button.getFont().getSize()))
+
+    # Start and Notification pack
+        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        start_upload_panel.add(self.Notification_position.label)
         start_upload_panel.add(self.start_upload_button)
         # Add the top panel to the main panel at the NORTH position
         self.positions_panel.add(start_upload_panel, BorderLayout.NORTH)
@@ -197,13 +203,17 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         split_panel_payload = JSplitPane(JSplitPane.VERTICAL_SPLIT)
         split_panel_payload.setDividerLocation(250)
         split_panel_payload.setBorder(None)
-        
+
+
     # Start upload button
-        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
         self.start_upload_button = JButton("Start upload", actionPerformed=self.start_upload)
         self.start_upload_button.setBackground(Color(255, 102, 51))
         self.start_upload_button.setForeground(Color.WHITE)
         self.start_upload_button.setFont(Font(self.start_upload_button.getFont().getName(), Font.BOLD, self.start_upload_button.getFont().getSize()))
+
+    # Start and Notification pack
+        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        start_upload_panel.add(self.Notification_payload.label)
         start_upload_panel.add(self.start_upload_button)
         # Add the top panel to the main panel at the NORTH position
         self.payloads_panel.add(start_upload_panel, BorderLayout.NORTH)
@@ -256,7 +266,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
         # Create the JList to display current file
         self.file_label = JLabel("  " + str(self.payload_files.getElementAt(self.current_index)))
-        print(self.payload_files.getElementAt(self.current_index))
+        # print(self.payload_files.getElementAt(self.current_index))
 
         # Request preview mornitoring
         self.editor_view = JTabbedPane()
@@ -287,12 +297,16 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         split_panel_history.setDividerLocation(250)
         split_panel_history.setBorder(None)
         
+        
     # Start upload button
-        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
         self.start_upload_button = JButton("Start upload", actionPerformed=self.start_upload)
         self.start_upload_button.setBackground(Color(255, 102, 51))
         self.start_upload_button.setForeground(Color.WHITE)
         self.start_upload_button.setFont(Font(self.start_upload_button.getFont().getName(), Font.BOLD, self.start_upload_button.getFont().getSize()))
+
+    # Start and Notification pack
+        start_upload_panel = JPanel(FlowLayout(FlowLayout.RIGHT))
+        start_upload_panel.add(self.Notification_history.label)
         start_upload_panel.add(self.start_upload_button)
         # Add the top panel to the main panel at the NORTH position
         self.history_panel.add(start_upload_panel, BorderLayout.NORTH)
@@ -372,7 +386,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         # Set internal state based on the selected upload mode name
         if mode_name == self.upload_modes[0]:  # "Upload one file per request"
             self.mode = 1
-            print("Mode set to {}.".format(mode_name))
+            # print("Mode is set to {}.".format(mode_name))
             self.RequestObject = None
             self.current_index = 0
             self.update_count()
@@ -380,14 +394,15 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             self.update_viewer_payload()
         elif mode_name == self.upload_modes[1]:  # "Upload all files in one request"
             self.mode = 2
-            print("Mode set to {}.".format(mode_name))
+            # print("Mode is set to {}.".format(mode_name))
             self.RequestObject = None
             self.current_index = 0
             self.update_count()
             self.update_file_label()
             self.update_viewer_payload()
         else:
-            print("Unknown Mode")
+            # print("Unknown Mode")
+            self.updateNotification("Unknown Mode")
 
     # checking the text is Interger or not
     def isValidInteger(self, text):
@@ -458,9 +473,11 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                 self.update_file_label()
                 self.update_viewer_payload()
             else:
-                print("Payload files are not set")
+                # print("Payload files are not set")
+                self.updateNotification("Payload files are not set")
         else:
-            print("Please fill request in the text editor in position tab")
+            # print("Please fill request into text editor in position tab")
+            self.updateNotification("Please fill request into text editor in position tab")
 
     def update_viewer_payload(self):
         if self.current_index == 0:
@@ -468,13 +485,14 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         elif self.current_index > 0:
             self.requestViewerForPayload.setMessage(self.RequestObject.get_part(self.current_index), True)  # setMessage(byte[] message, boolean isRequest)
         else:
-            print("Index Error")
+            # print("Index Error")
+            self.updateNotification("Index Error")
 
 
     def update_count(self):
         if self.mode == 1:
             self.count_label.setText((str(int(self.current_index)) + "  of  " + str(self.payload_files.size()-1)))
-            print(self.payload_files.getElementAt(self.current_index))
+            # print(self.payload_files.getElementAt(self.current_index))
         else:
             self.count_label.setText("1  of  1")
 
@@ -548,57 +566,62 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                         self.protocal, self.host = str(split_text[0]), str(split_text[1]) # protocal, host
                         self.port = int(port)
                     else:
-                        print("Please fill the target follow this format -> http://example.com")
+                        # print("Please fill the target follow this format -> http://example.com")
+                        self.updateNotification("Please fill target follow this format -> http://example.com")
                         self.protocal, self.host, self.port = None, None, None
                 else:
-                    print("Please fill the target follow this format -> http://example.com")
+                    # print("Please fill the target follow this format -> http://example.com")
+                    self.updateNotification("Please fill target follow this format -> http://example.com")
                     self.protocal, self.host, self.port = None, None, None
             else:
-                print("Please recheck your port number!")
+                # print("Please recheck your port number!")
+                self.updateNotification("Please recheck your port number!")
         else:
-            print("Please fill the port number!")
+            # print("Please fill the port number!")
+            self.updateNotification("Please fill the port number!")
             self.protocal, self.host, self.port = None, None, None
 
     def sendRequestInThread(self, requestBytes):
         # print("Queueing request")
         # self.request_queue.put(requestBytes)
-        print("in sendRequestInThread")
+        # print("in sendRequestInThread")
         t = threading.Thread(target=self.sendRequest, args=[self.host, self.port, self.protocal, requestBytes])
         t.start()
         t.join()
 
     
     def sendRequest(self, host, port, protocal, requestBytes):
-        print("in sendRequest")
+        # print("in sendRequest")
         try:
             # Create HTTP service
-            print(protocal + " service")
+            # print(protocal + " service")
             http_Service = self._helpers.buildHttpService(host, port, protocal) # (java.lang.String host, int port, boolean useHttps)
 
             # Send request
-            print("start makeBurpRequest")
+            # print("start makeBurpRequest")
             self._callbacks.makeHttpRequest(http_Service, requestBytes)
             # if RR:
             #     print(RR.getRequest())
             #     print(RR.getResponse())
-            print(self.request_map)
-            print(self.response_map)
+            # print(self.request_map)
+            # print(self.response_map)
 
         except Exception as e:
             print("Error sending request : " + str(e))
+            self.updateNotification("Error!!")
         
-        print("end sendRequest")
-        print("===============================")
+        # print("end sendRequest")
+        # print("===============================")
 
 
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
         if (toolFlag == self._callbacks.TOOL_EXTENDER):
-            print("start processHttpMessage")
+            # print("start processHttpMessage")
             try:
                 if messageIsRequest:
-                    print("start messageIsRequest")
-                    print(messageInfo)
+                    # print("start messageIsRequest")
+                    # print(messageInfo)
                     order_number = self.getNextOrderNumber()
                     timestamp = Date()
                     requestInfo = self._helpers.analyzeRequest(messageInfo)
@@ -607,31 +630,31 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                     method = requestInfo.getMethod()
                     file_path = self.getNextFilePath()
 
-                    print("Order Number : " + str(order_number))
-                    print(timestamp.toString() + " " + url + " " + method + " " + file_path)
-                    print(type(messageInfo))
+                    # print("Order Number : " + str(order_number))
+                    # print(timestamp.toString() + " " + url + " " + method + " " + file_path)
+                    # print(type(messageInfo))
                     self.request_map[order_number] = messageInfo
 
 
                     requestBytes = messageInfo.getRequest()
                     if requestBytes:
                         self.fullRequests[order_number] = buffer(requestBytes)
-                        print(self.fullRequests[order_number])
+                        # print(self.fullRequests[order_number])
                     
                         # Create a new log entry for the request
                         entry = LogEntry(order_number, url, method, file_path, "", "", timestamp)
                         self.table_model.addLogEntry(entry)
-                    print("End of messageIsRequest")
-                    print("===============================")
+                    # print("End of messageIsRequest")
+                    # print("===============================")
                     
                     
                 elif not messageIsRequest:
-                    print("start messageIsNotRequest")
-                    print(messageInfo)
+                    # print("start messageIsNotRequest")
+                    # print(messageInfo)
                     order_number = self.request_counter
                     responseInfo = self._helpers.analyzeResponse(messageInfo.getResponse())
 
-                    print("Order Number : " + str(order_number))
+                    # print("Order Number : " + str(order_number))
 
                     if order_number is not None:
                         self.response_map[order_number] = messageInfo
@@ -640,19 +663,21 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                             self.fullResponses[order_number] = buffer(responseBytes)
                             status_code = responseInfo.getStatusCode()
                             length = len(messageInfo.getResponse().tostring())
-                            print(str(status_code) + " " + str(length))
-                            print(self.fullResponses[order_number])
+                            # print(str(status_code) + " " + str(length))
+                            # print(self.fullResponses[order_number])
                             # Update the log entry for this response
                             self.table_model.updateLogEntry(order_number, status_code, length)
                     
-                    print("End of messageIsNotRequest")
-                    print("===============================")
-                    print("===============================")
+                    # print("End of messageIsNotRequest")
+                    # print("===============================")
+                    # print("===============================")
                 else:
-                    print("Not found request or response")
+                    # print("Not found request or response")
+                    self.updateNotification("Not found request or response")
 
             except Exception as e:
                 print("Error processing HTTP message:", str(e))
+                self.updateNotification("Error!!")
 
     # def process_queue(self):
     #     while True:
@@ -682,27 +707,29 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                             self.index_file_running = 0
                             for i in range (1, self.payload_files.size()):
                                 requestBytes = self.RequestObject.get_part(i) # b[]
-                                print("get requestBytes mode 1")
+                                # print("get requestBytes mode 1")
                                 # self.sendRequest(requestBytes)
                                 self.sendRequestInThread(requestBytes)
-                            print(">> Display <<")
-                            print(buffer(self.request_map[1].getRequest()))
+                            # print(">> Display <<")
+                            # print(buffer(self.request_map[1].getRequest()))
                                 
                         
                     elif self.mode == 2:
                         self.index_file_running = 1
                         requestBytes = self.RequestObject.get_part(1)
-                        print("get requestBytes mode 2")
+                        # print("get requestBytes mode 2")
                         # self.sendRequest(requestBytes)
                         self.sendRequestInThread(requestBytes)
                         
             else:
-                print("Not found protocal in the target < http, https >")
-                print("Please fill the target follow this format -> http://example.com")
+                # print("Not found protocal in the target < http, https >")
+                # print("Please fill the target follow this format -> http://example.com")
+                self.updateNotification("Not found protocal in the target (http or https) Ex.-> http://example.com ")
                 self.host, self.port, self.protocal = None, None, None
 
         else:
-            print("Please generate request before upload!")
+            # print("Please generate request before upload!")
+            self.updateNotification("Please generate request before upload!")
 
 
     def createTopicLabel(self, topic_text, increaseSizeBy=4): # return JLabel
@@ -736,10 +763,16 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
     
     # Display the request in the message editor
     def displayInMyExtension(self, protocal_bytes, header_bytes, request_bytes, port):
-        print(protocal_bytes + header_bytes)
+        # print(protocal_bytes + header_bytes)
         self.requestViewerForPosition.setMessage(request_bytes, True)
         self.target_setting.setText(protocal_bytes + b'://' + header_bytes)  # Set the header text
         self.port_setting.setText(str(port))
+
+    def updateNotification(self, text):
+        self.Notification_position.update_text(text)
+        self.Notification_payload.update_text(text)
+        self.Notification_history.update_text(text)
+        
 
     # These methods are required for the IMessageEditorController interface
     def getHttpService(self):
@@ -753,8 +786,25 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
     def getResponse(self):
         return self._invocation.getSelectedMessages()[0].getResponse() # byte[]
+    
+class manageNotification:
+    def __init__(self):
+        self.label = JLabel("Welcome! to < Files Uploader > (^ 3 ^))")
+        self.set_text_color(Color.RED)  # Default text color to red
+        self.set_background_color(Color.YELLOW)  # Default background color to yellow
+        self.label.setOpaque(True)  # Needed for the background color to show
+
+    def update_text(self, new_text):
+        self.label.setText(new_text)
+
+    def set_text_color(self, color):
+        self.label.setForeground(color)
+
+    def set_background_color(self, color):
+        self.label.setBackground(color)
+
         
-    #  MouseAdapter class to handle mouse events
+#  MouseAdapter class to handle mouse events
 class MouseAdapter(MouseAdapter):
     def __init__(self, extender):
         self.extender = extender
@@ -873,7 +923,8 @@ class IntegerComparator(Comparator):
 
 
 class ModifyRequest:
-    def __init__(self, request, fileUploadList, mode):
+    def __init__(self, request, fileUploadList, mode, class_burp):
+        self.class_burp = class_burp
         # fileUpload = "Files_Test/file.png" # For now support image, audio, video, and PDF metadata only
         # outputPath = "output_file.bin"
         # fileUploadList = ["Files_Test/file.json", "Files_Test/file.png","Files_Test/s_file.pdf", "Files_Test/s_file.docx"]
@@ -890,19 +941,19 @@ class ModifyRequest:
         
 
         self.fileUploadList = fileUploadList # file path list
-        print(self.fileUploadList)
+        # print(self.fileUploadList)
         self.ModeFlag = mode # 1 (a file per request), 2 (all files in a request)
 
         with open(self.requestFilePath, 'wb') as request_file:
             request_file.write(request)
-            print("write request successful")
+            # print("write request successful")
 
         self.request = self.read_request() # Binary
 
         self.boundary = self.get_boundary()
-        print("Boundary: " + str(self.boundary))
+        # print("Boundary: " + str(self.boundary))
         self.method = self.get_http_method()
-        print("Method: " + self.method)
+        # print("Method: " + self.method)
         
 
     # REQUEST #################
@@ -921,6 +972,7 @@ class ModifyRequest:
                 return match.group(1).encode()  # Binary
             else:
                 print("HTTP Method not found!")
+                self.class_burp.updateNotification("HTTP Method not found!")
                 return None
 
 
