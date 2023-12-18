@@ -3,46 +3,19 @@ import re
 import tempfile
 import mimetypes
 from array import array
-from time import sleep
+# from time import sleep
 import threading
-import Queue
+# import Queue
 
 
 from burp import (IBurpExtender, ITab, IContextMenuFactory, IContextMenuInvocation, 
 IHttpService, IParameter, IMessageEditorController, IHttpRequestResponse, IProxyListener,
 IMessageEditorTabFactory, IMessageEditorTab, IExtensionStateListener )
-from javax.swing import (JPanel,
-    JTabbedPane,
-    JButton,
-    JFileChooser,
-    JList,
-    JScrollPane,
-    DefaultListModel,
-    JTextArea,
-    JLabel,
-    BoxLayout,
-    JFrame,
-    SwingUtilities,
-    JMenuBar,
-    JMenu,
-    JTextField,
-    JSplitPane,
-    JCheckBox,
-    JRadioButton,
-    JCheckBoxMenuItem,
-    JPopupMenu,
-    JTable,
-    JViewport,
-    JScrollBar,
-    JSpinner,
-    JSpinner,
-    JComboBox,
-    JOptionPane)
+from javax.swing import (JPanel, JTabbedPane, JButton, JFileChooser, JList, JScrollPane,
+    DefaultListModel, JTextArea, JLabel, JSplitPane, JTable, JComboBox,)
 from java.awt import BorderLayout, FlowLayout, GridLayout, Dimension, Color, Font
 from burp import IHttpListener
 from burp import IContextMenuFactory, IContextMenuInvocation
-from java.awt import Toolkit
-from java.awt.datatransfer import StringSelection
 from java.awt.event import ActionListener, MouseAdapter
 from javax.swing import JMenuItem
 from java.util import ArrayList, Date, Comparator
@@ -383,6 +356,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 ### POSITIONS METHODS ###############
     # Set up mode when select mode at combobox
     def setUploadMode(self, mode_name):
+        self.updateNotification("")
         # Set internal state based on the selected upload mode name
         if mode_name == self.upload_modes[0]:  # "Upload one file per request"
             self.mode = 1
@@ -419,6 +393,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 ### PAYLOADS METHODS ############### 
     def add_payload(self, event):
+        self.updateNotification("")
         file_chooser = JFileChooser()
         file_chooser.setMultiSelectionEnabled(True)  # Allow multiple file selection
         result = file_chooser.showOpenDialog(self.payloads_panel)
@@ -441,6 +416,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         return [model.elementAt(i) for i in range(model.size())]
     
     def remove_payload(self, event):
+        self.updateNotification("")
         selected_indices = self.payload_list.getSelectedIndices()
         for index in reversed(selected_indices):  # Reverse to avoid shifting issues
             self.payload_files.remove(index)
@@ -451,6 +427,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             self.update_viewer_payload()
 
     def clear_payloads(self, event):
+        self.updateNotification("")
         self.payload_files.clear()
         self.payload_files.addElement(None)
         self.current_index = 0
@@ -460,21 +437,25 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
         self.update_viewer_payload()
     
     def generate_payloads(self, event):
+        self.updateNotification("")
         # Assuming requestViewerForPosition is your MessageEditor instance
         self.request = self.requestViewerForPosition.getMessage()
         if len(self.request) > 0:
             if self.payload_files.size() > 1:
                 # Convert byte array to bytes (read from memory)
                 binary_string_request = buffer(self.request)
-                self.RequestObject = ModifyRequest(binary_string_request, self.convert_to_list(self.payload_files), self.mode)
-                self.RequestObject.add_file()
-                self.current_index = 1
-                self.update_count()
-                self.update_file_label()
-                self.update_viewer_payload()
+                self.RequestObject = ModifyRequest(binary_string_request, self.convert_to_list(self.payload_files), self.mode, self)
+                modifyFlag = self.RequestObject.add_file()
+                if modifyFlag == 1:
+                    self.current_index = 1
+                    self.update_count()
+                    self.update_file_label()
+                    self.update_viewer_payload()
+                else:
+                    self.RequestObject = None
             else:
                 # print("Payload files are not set")
-                self.updateNotification("Payload files are not set")
+                self.updateNotification("Files payload are not set")
         else:
             # print("Please fill request into text editor in position tab")
             self.updateNotification("Please fill request into text editor in position tab")
@@ -506,6 +487,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             self.file_label.setText("  Multiple files in the request below")
 
     def previous_payload(self, event):
+        self.updateNotification("")
         if self.RequestObject is not None:
             if self.mode == 1:
                 if self.current_index > 1:
@@ -519,6 +501,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 
     def next_payload(self, event):
+        self.updateNotification("")
         if self.RequestObject is not None:
             if self.mode == 1:
                 if self.current_index < self.payload_files.size() - 1:
@@ -562,24 +545,32 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
             if self.isValidInteger(port):
                 if '://' in target:
                     split_text = re.split(r':?//', target, 1)
-                    if split_text[0] and split_text[1]:
-                        self.protocal, self.host = str(split_text[0]), str(split_text[1]) # protocal, host
-                        self.port = int(port)
+                    if split_text[0]:
+                        if split_text[1]:
+                            if str(split_text[0]) == "http" or str(split_text[0]) == "https":
+                                self.protocal, self.host = str(split_text[0]), str(split_text[1]) # protocal, host
+                                self.port = int(port)
+                            else:
+                                # print("Please fill the target follow this format -> http://example.com")
+                                self.updateNotification("Unknown this protocal in the target (support http and https only). | Ex.-> http://example.com ")
+                        else:
+                            # print("Please fill the target follow this format -> http://example.com")
+                            self.updateNotification("Not found host in the target. | Ex. -> http://example.com")
                     else:
                         # print("Please fill the target follow this format -> http://example.com")
-                        self.updateNotification("Please fill target follow this format -> http://example.com")
-                        self.protocal, self.host, self.port = None, None, None
+                        self.updateNotification("Not found protocal in the target (http or https). | Ex. -> http://example.com")
+                        # self.protocal, self.host, self.port = None, None, None
                 else:
                     # print("Please fill the target follow this format -> http://example.com")
                     self.updateNotification("Please fill target follow this format -> http://example.com")
-                    self.protocal, self.host, self.port = None, None, None
+                    # self.protocal, self.host, self.port = None, None, None
             else:
                 # print("Please recheck your port number!")
                 self.updateNotification("Please recheck your port number!")
         else:
             # print("Please fill the port number!")
             self.updateNotification("Please fill the port number!")
-            self.protocal, self.host, self.port = None, None, None
+            # self.protocal, self.host, self.port = None, None, None
 
     def sendRequestInThread(self, requestBytes):
         # print("Queueing request")
@@ -672,8 +663,8 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
                     # print("===============================")
                     # print("===============================")
                 else:
-                    # print("Not found request or response")
-                    self.updateNotification("Not found request or response")
+                    print("Not found request or response")
+                    # self.updateNotification("Not found request or response")
 
             except Exception as e:
                 print("Error processing HTTP message:", str(e))
@@ -696,40 +687,40 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IContextMenuFactory, ICon
 
 ### MAIN METHODS ###############
     def start_upload(self, event):
+        self.updateNotification("")
         if self.RequestObject is not None:
             # save message in payload message editor
             self.RequestObject.replace_part(self.current_index, buffer(self.requestViewerForPayload.getMessage()))
             self.get_HttpService_fromJText()
-            if self.protocal == "http" or self.protocal == "https":
-                if self.host is not None and self.port is not None:
-                    if self.mode == 1:
-                            
-                            self.index_file_running = 0
-                            for i in range (1, self.payload_files.size()):
-                                requestBytes = self.RequestObject.get_part(i) # b[]
-                                # print("get requestBytes mode 1")
-                                # self.sendRequest(requestBytes)
-                                self.sendRequestInThread(requestBytes)
-                            # print(">> Display <<")
-                            # print(buffer(self.request_map[1].getRequest()))
+            if self.protocal is not None:
+                if self.host is not None:
+                    if self.port is not None:
+                        if self.mode == 1:
                                 
+                                self.index_file_running = 0
+                                for i in range (1, self.payload_files.size()):
+                                    requestBytes = self.RequestObject.get_part(i) # b[]
+                                    # print("get requestBytes mode 1")
+                                    # self.sendRequest(requestBytes)
+                                    self.sendRequestInThread(requestBytes)
+                                # print(">> Display <<")
+                                # print(buffer(self.request_map[1].getRequest()))
+                                    
+                            
+                        elif self.mode == 2:
+                            self.index_file_running = 1
+                            requestBytes = self.RequestObject.get_part(1)
+                            # print("get requestBytes mode 2")
+                            # self.sendRequest(requestBytes)
+                            self.sendRequestInThread(requestBytes)
+                    
                         
-                    elif self.mode == 2:
-                        self.index_file_running = 1
-                        requestBytes = self.RequestObject.get_part(1)
-                        # print("get requestBytes mode 2")
-                        # self.sendRequest(requestBytes)
-                        self.sendRequestInThread(requestBytes)
-                        
-            else:
-                # print("Not found protocal in the target < http, https >")
-                # print("Please fill the target follow this format -> http://example.com")
-                self.updateNotification("Not found protocal in the target (http or https) Ex.-> http://example.com ")
-                self.host, self.port, self.protocal = None, None, None
+            
 
         else:
             # print("Please generate request before upload!")
             self.updateNotification("Please generate request before upload!")
+        self.host, self.port, self.protocal = None, None, None
 
 
     def createTopicLabel(self, topic_text, increaseSizeBy=4): # return JLabel
@@ -971,8 +962,7 @@ class ModifyRequest:
             if match:
                 return match.group(1).encode()  # Binary
             else:
-                print("HTTP Method not found!")
-                self.class_burp.updateNotification("HTTP Method not found!")
+                # print("HTTP Method not found!")
                 return None
 
 
@@ -985,7 +975,7 @@ class ModifyRequest:
             # print("boundary=", boundary_value.decode('utf-8', 'ignore'))
             return boundary_value # binary
         else:
-            print("Have no boundary")
+            # print("Have no boundary")
             return None
 
     def add_new_part(self, boundary, new_filename, new_content_type, new_binary_content):
@@ -1044,17 +1034,17 @@ class ModifyRequest:
         with open(new_filename, "wb") as f:
             f.write(content)
             f.close()
-        print("Message saved to {}".format(new_filename))
+        # print("Message saved to {}".format(new_filename))
 
     def save_request_mode1(self, filename, index, message):
         if index == 0:
             with open(filename, 'wb') as f:
                 f.write(message + self.separator)
-                print("File number {} was added".format(index+1))
+                # print("File number {} was added".format(index+1))
         else:
             with open(filename, 'ab') as f:
                 f.write(message + self.separator)
-                print("File number {} was added".format(index+1))
+                # print("File number {} was added".format(index+1))
 
     def save_request_mode2(self, filename, message):
         # Save the modified data to a new binary file
@@ -1109,7 +1099,7 @@ class ModifyRequest:
         # >>> One file per request <<<
         if self.ModeFlag == 1:
             for index, file in enumerate(self.fileUploadList[1:]):
-                print(file)
+                # print(file)
                 # Extract the data between \n\n and the ending sequence
                 start_index = self.request.find(b'\r\n\r\n')
                 end_index = self.request.find(end_boundary)
@@ -1210,7 +1200,10 @@ class ModifyRequest:
                 self.modifyFlag = 1
         
         else:
-            print("Not support this mode")
+            self.modifyFlag = 0
+            # print("Not support this mode")
+            self.class_burp.updateNotification("This upload mode is not supported.")
+            
 
     def post_unbound(self):
         if self.ModeFlag==1:
@@ -1233,7 +1226,10 @@ class ModifyRequest:
                 self.save_request_mode1(self.modifiedFilename, index, final_message)
                 self.modifyFlag = 1
         else:
-            print("Not support this mode")
+            self.modifyFlag = 0
+            # print("Not support this mode")
+            self.class_burp.updateNotification("This upload mode is not supported.")
+            
 
     def put(self):
         if self.ModeFlag==1:
@@ -1259,7 +1255,10 @@ class ModifyRequest:
                 self.save_request_mode1(self.modifiedFilename, index, final_message)
                 self.modifyFlag = 1
         else:
-            print("Not support this mode")
+            self.modifyFlag = 0
+            # print("Not support this mode")
+            self.class_burp.updateNotification("This upload mode is not supported.")
+            
 
     def patch_bound(self):
         start_boundary = b'--' + self.boundary
@@ -1373,7 +1372,9 @@ class ModifyRequest:
                 self.modifyFlag = 1
         
         else:
-            print("Not support this mode")
+            self.modifyFlag = 0
+            # print("Not support this mode")
+            self.class_burp.updateNotification("This upload mode is not supported.")
 
 
     def patch_unbound(self):
@@ -1400,39 +1401,55 @@ class ModifyRequest:
                 self.save_request_mode1(self.modifiedFilename, index, final_message)
                 self.modifyFlag = 1
         else:
-            print("Not support this mode")
+            self.modifyFlag = 0
+            # print("Not support this mode")
+            self.class_burp.updateNotification("This upload mode is not supported.")
 
 
     def add_file(self):
-        print("add_file")
-        print(self.method)
-        if self.method == b'POST':
-            if self.boundary is not None:
-                print("post_bound")
-                self.post_bound()
-            else:
-                print("post_unbound")
-                self.post_unbound()
+        try:
+            # print("add_file")
+            # print(self.method)
+            if self.method == b'POST':
+                if self.boundary is not None:
+                    # print("post_bound")
+                    self.post_bound()
+                else:
+                    # print("post_unbound")
+                    self.post_unbound()
 
-        elif self.method == b'PUT':
-            print("put")
-            self.put()
+            elif self.method == b'PUT':
+                # print("put")
+                self.put()
 
-        elif self.method == b'PATCH':
-            if self.boundary is not None:
-                print("patch_bound")
-                self.patch_bound()
+            elif self.method == b'PATCH':
+                if self.boundary is not None:
+                    # print("patch_bound")
+                    self.patch_bound()
+                else:
+                    # print("patch_unbound")
+                    self.patch_unbound()
+                
             else:
-                print("patch_unbound")
-                self.patch_unbound()
+                # print(">>> Not found HTTP method supporting files uploading <<<")
+                self.class_burp.updateNotification(">>> Not found HTTP method supporting files uploading [POST, PUT and PATCH only] <<<")
             
-        else:
-            print(">>> Not found HTTP method supporting files uploading <<<")
-        if self.modifyFlag == 1:
-            print(">>> Modify request successful <<<")
-        else:
-            print(">>> Failed to modify request <<<")
+            # Check Request Creation
+            if self.modifyFlag == 1:
+                # print(">>> Modify request successful <<<")
+                # self.class_burp.updateNotification(">>> Generate request successful <<<")
+                pass
+            else:
+                # print(">>> Failed to modify request <<<")
+                # self.class_burp.updateNotification(">>> Failed to generate request <<<")
+                self.modifyFlag = 0
 
+        except Exception as e:
+            print("Generate request error : " + str(e))
+            self.class_burp.updateNotification("Error!!")
+            return 0
+
+        return self.modifyFlag
 
     
     # Get each part of request #################
