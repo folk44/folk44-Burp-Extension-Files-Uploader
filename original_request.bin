@@ -1,37 +1,11 @@
-POST /orbicon/3rdParty/rad-plus/upload.php HTTP/1.1
-Host: www.dia-pen.hr
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
-Accept-Language: en-US,en;q=0.5
-Accept-Encoding: gzip, deflate, br
-Content-Type: multipart/form-data; boundary=---------------------------90592417629971227952765495114
-Content-Length: 764
-Origin: http://www.dia-pen.hr
-Connection: close
-Referer: http://www.dia-pen.hr/orbicon/3rdParty/rad-plus/test.html
-Upgrade-Insecure-Requests: 1
+POST /upload HTTP/1.1
+Host: api.example.com
+Authorization: Bearer YOUR_ACCESS_TOKEN
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
 
------------------------------90592417629971227952765495114
-Content-Disposition: form-data; name="userfile[0]"; filename="file.json"
-Content-Type: application/json
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="file.jpg"
+Content-Type: image/jpeg
 
-{
-    "fruit": "Apple",
-    "size": "Large",
-    "color": "Red"
-}
------------------------------90592417629971227952765495114
-Content-Disposition: form-data; name="userfile[1]"; filename=""
-Content-Type: application/octet-stream
-
-
------------------------------90592417629971227952765495114
-Content-Disposition: form-data; name="userfile[2]"; filename=""
-Content-Type: application/octet-stream
-
-
------------------------------90592417629971227952765495114
-Content-Disposition: form-data; name="sessionid"
-
-<?= $sid ?>
------------------------------90592417629971227952765495114--
+[Binary data of the file goes here]
+------WebKitFormBoundary7MA4YWxkTrZu0gW--

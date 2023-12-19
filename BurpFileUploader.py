@@ -980,7 +980,7 @@ class ModifyRequest:
 
     def add_new_part(self, boundary, new_filename, new_content_type, new_binary_content):
         return boundary + b'\r\n' + \
-            b'Content-Disposition: form-data; name="file"; filename=' + new_filename + b'\r\n' + \
+            b'Content-Disposition: form-data; name="file"; filename="' + new_filename +'"' + b'\r\n' + \
             b'Content-Type: ' + new_content_type + b'\r\n\r\n' + \
             new_binary_content + b'\r\n'
 
