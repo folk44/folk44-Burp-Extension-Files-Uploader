@@ -1,10 +1,31 @@
-POST /upload HTTP/1.1
-Host: api.example.com
-Authorization: Bearer YOUR_ACCESS_TOKEN
-Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+POST /register_confirm.php HTTP/1.1
+Host: foophones.securitybrigade.com:8080
+Content-Type: multipart/form-data; boundary=---------------------------333746589621627464483919676970
+Content-Length: 869
+Origin: http://foophones.securitybrigade.com:8080
 
-------WebKitFormBoundary7MA4YWxkTrZu0gW
-Content-Disposition: form-data; name="file"; filename="file1.json"
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="fname"
+
+Test
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="lname"
+
+Test
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="country"
+
+Test
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="user"
+
+Test12345
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="pass"
+
+12345678
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="avatar"; filename="file1.json"
 Content-Type: None
 
 {
@@ -12,8 +33,41 @@ Content-Type: None
     "size": "Large",
     "color": "Red"
 }
-------WebKitFormBoundary7MA4YWxkTrZu0gW
-Content-Disposition: form-data; name="file"; filename=file2.json
+-----------------------------333746589621627464483919676970--
+
+--*--
+-*-*-
+-*-BurpExtensionByFolk44-*-
+-*-*-
+--*--
+POST /register_confirm.php HTTP/1.1
+Host: foophones.securitybrigade.com:8080
+Content-Type: multipart/form-data; boundary=---------------------------333746589621627464483919676970
+Content-Length: 873
+Origin: http://foophones.securitybrigade.com:8080
+
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="fname"
+
+Test
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="lname"
+
+Test
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="country"
+
+Test
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="user"
+
+Test67890
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="pass"
+
+12345678
+-----------------------------333746589621627464483919676970
+Content-Disposition: form-data; name="avatar"; filename="file2.json"
 Content-Type: None
 
 {
@@ -21,7 +75,13 @@ Content-Type: None
     "size": "Large",
     "color": "Orange"
 }
-------WebKitFormBoundary7MA4YWxkTrZu0gW--
+-----------------------------333746589621627464483919676970--
+
+--*--
+-*-*-
+-*-BurpExtensionByFolk44-*-
+-*-*-
+--*--
 
 --*--
 -*-*-
